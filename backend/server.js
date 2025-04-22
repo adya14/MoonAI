@@ -444,7 +444,6 @@ app.post('/process-answer2', async (req, res) => {
   res.type('text/xml').send(twiml.toString());
 });
 
-// In the Q&A handler (/process-qna), modify the response generation:
 app.post('/process-qna', async (req, res) => {
   const callSid = req.query.callSid;
   const recordingUrl = req.body.RecordingUrl;
@@ -453,30 +452,26 @@ app.post('/process-qna', async (req, res) => {
   
   const twiml = new twilio.twiml.VoiceResponse();
 
-  // Handle early termination
-  if (digits === '#') {
-    console.log(`[${callSid}] User ended call during Q&A`);
-    twiml.say({
-      voice: 'Polly.Aditi',
-      language: 'en-IN'
-    }, 'Thank you for your time. Goodbye.');
-    twiml.hangup();
-    await endInterview(callSid);
-    return res.type('text/xml').send(twiml.toString());
-  }
-
-  if (!state) {
-    twiml.say({
-      voice: 'Polly.Aditi',
-      language: 'en-IN'
-    }, 'Session expired. Goodbye.');
-    twiml.hangup();
-    return res.type('text/xml').send(twiml.toString());
-  }
-
   try {
+    // Handle early termination
+    if (digits === '#') {
+      console.log(`[${callSid}] User ended call during Q&A`);
+      twiml.say({
+        voice: 'Polly.Aditi',
+        language: 'en-IN'
+      }, 'Thank you for your time. Goodbye.');
+      twiml.hangup();
+      await endInterview(callSid);
+      return res.type('text/xml').send(twiml.toString());
+    }
+
+    if (!state) {
+      throw new Error('Interview state not found');
+    }
+
+    // Check if user had no questions
     if (!recordingUrl) {
-      // No question asked
+      console.log(`[${callSid}] User had no questions, ending call`);
       twiml.say({
         voice: 'Polly.Aditi',
         language: 'en-IN'
@@ -486,37 +481,47 @@ app.post('/process-qna', async (req, res) => {
       return res.type('text/xml').send(twiml.toString());
     }
 
-    // Process question
+    // Process user's question with timeout
+    console.log(`[${callSid}] Processing user question...`);
     const question = await transcribeRecording(recordingUrl, callSid);
     console.log(`[${callSid}] User Question: ${question}`);
     state.history.push({ role: 'user', content: question });
 
-    // Get answer with timeout protection
+    // Get AI response with timeout protection
+    console.log(`[${callSid}] Generating AI response...`);
     const aiResponse = await Promise.race([
       getQnAResponse(question, state.history),
-      new Promise((resolve) => setTimeout(() => resolve("Thank you for your question. We'll follow up with more details."), 5000))
+      new Promise((resolve) => setTimeout(
+        () => resolve("Thank you for your question. We'll follow up with more details later."),
+        8000 // 8 second timeout
+      ))
     ]);
 
-    console.log(`[${callSid}] AI Answer: ${aiResponse}`);
+    console.log(`[${callSid}] AI Response: ${aiResponse}`);
     state.history.push({ role: 'assistant', content: aiResponse });
 
-    // Deliver answer and end call
+    // Deliver response
     twiml.say({
       voice: 'Polly.Aditi',
       language: 'en-IN'
-    }, `${aiResponse} Thank you for your time! We will review your answers and get back to you soon. Goodbye!`);
+    }, `${aiResponse} That concludes our interview. Thank you for your time!`);
     twiml.hangup();
 
-    await endInterview(callSid);
   } catch (error) {
-    console.error(`[${callSid}] Q&A processing error:`, error);
+    console.error(`[${callSid}] Q&A Processing Error:`, error);
+    
+    // Fallback response that always works
     twiml.say({
       voice: 'Polly.Aditi',
       language: 'en-IN'
     }, 'Thank you for your time! We will review your answers and get back to you soon. Goodbye!');
     twiml.hangup();
-    await endInterview(callSid);
   }
+
+  // Ensure interview is properly ended
+  await endInterview(callSid).catch(err => {
+    console.error(`[${callSid}] Error in endInterview:`, err);
+  });
 
   return res.type('text/xml').send(twiml.toString());
 });

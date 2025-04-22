@@ -5,8 +5,7 @@
   "main": "db.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js",
-    "postinstall": "choco install sox || brew install sox || apt-get install sox"
+    "start": "node server.js"
   },
   "keywords": [],
   "author": "",
@@ -17,10 +16,9 @@
     "@fortawesome/free-solid-svg-icons": "^6.7.2",
     "@fortawesome/react-fontawesome": "^0.2.2",
     "@picovoice/web-voice-processor": "^4.0.9",
-    "@ricky0123/vad": "^0.2.4",
     "@twilio/voice-sdk": "^2.12.4",
     "axios": "^1.8.4",
-    "bcrypt": "^5.1.1",
+    "bcryptjs": "^3.0.2",
     "body-parser": "^1.20.3",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
@@ -34,7 +32,6 @@
     "node-cron": "^3.0.3",
     "node-fetch": "^3.3.2",
     "node-record-lpcm16": "^1.0.1",
-    "node-vad": "^1.1.4",
     "nodemailer": "^6.10.0",
     "openai": "^4.87.3",
     "passport": "^0.7.0",
@@ -47,7 +44,6 @@
     "react-toastify": "^11.0.5",
     "sound-play": "^1.1.0",
     "twilio": "^5.5.0",
-    "vad": "^0.0.1",
     "voice-activity-detection": "^0.0.5",
     "wav": "^1.0.2",
     "wavefile": "^11.0.0",

@@ -121,14 +121,14 @@ async function getQnAResponse(question, conversationHistory = []) {
     const messages = [
       {
         role: "system",
-        content: "You are an interviewer. Answer the candidate's question directly and professionally without adding additional questions or prompts."
+        content: "You are an interviewer. Provide a concise 1-2 sentence answer to the candidate's question."
       },
       ...conversationHistory,
       { role: "user", content: question }
     ];
 
     const response = await getDeepSeekResponse(messages);
-    return response;
+    return response || "Thank you for your question. We'll follow up with more details later.";
   } catch (error) {
     console.error("Error generating Q&A response:", error);
     return "Thank you for your question. We'll follow up with more details later.";
