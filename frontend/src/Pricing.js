@@ -20,7 +20,7 @@ const Pricing = () => {
     {
       title: "Basic Plan",
       price: "₹1/month",
-      features: ["100 AI Interviews"],
+      features: ["2 AI Interviews"],
       plan: "Basic Plan",
       amount: 1,
     },
