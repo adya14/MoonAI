@@ -49,7 +49,7 @@ async function transcribeRecording(recordingUrl, callSid, retries = 3, delayMs =
         .on('error', reject);
     });
 
-    // 4. Transcribe
+    // 4. Transcribe (still using OpenAI Whisper)
     const transcription = await openai.audio.transcriptions.create({
       file: fs.createReadStream(tempFilePath),
       model: "whisper-1",
@@ -73,6 +73,31 @@ async function transcribeRecording(recordingUrl, callSid, retries = 3, delayMs =
   }
 }
 
+async function getDeepSeekResponse(messages, requestRating = false) {
+  try {
+    const response = await axios.post(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        model: 'deepseek/deepseek-chat',
+        messages,
+        temperature: 0.7,
+        response_format: requestRating ? { type: "json_object" } : undefined
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.DEEPSEEK_API}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    return response.data.choices[0].message.content;
+  } catch (error) {
+    console.error('Error calling DeepSeek:', error.response?.data || error.message);
+    throw error;
+  }
+}
+
 async function getAiResponse(text, role, jobDescription, requestRating, conversationHistory = []) {
   try {
     const messages = getInterviewPrompt(role, jobDescription);
@@ -83,22 +108,14 @@ async function getAiResponse(text, role, jobDescription, requestRating, conversa
 
     messages.push({ role: "user", content: text });
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages,
-      response_format: requestRating ? { type: "json_object" } : undefined
-    });
-
-    return requestRating 
-      ? response.choices[0].message.content
-      : response.choices[0].message.content;
+    const response = await getDeepSeekResponse(messages, requestRating);
+    return response;
   } catch (error) {
     console.error("Error generating AI response:", error);
     throw error;
   }
 }
 
-// interview.js
 async function getQnAResponse(question, conversationHistory = []) {
   try {
     const messages = [
@@ -110,26 +127,20 @@ async function getQnAResponse(question, conversationHistory = []) {
       { role: "user", content: question }
     ];
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages,
-      temperature: 0.3  // Lower temperature for more focused answers
-    });
-
-    return response.choices[0].message.content;
+    const response = await getDeepSeekResponse(messages);
+    return response;
   } catch (error) {
     console.error("Error generating Q&A response:", error);
     return "Thank you for your question. We'll follow up with more details later.";
   }
 }
 
-// Update generateFinalScore function
 async function generateFinalScore(conversationHistory, role, jobDescription) {
   try {
     const messages = [
       {
         role: "system",
-        content: `Evaluate this interview and return ONLY a JSON object with these exact fields:
+        content: `Evaluate this interview and strictly return ONLY a JSON object with these exact fields:
         {
           "technicalScore": number (1-10),
           "communicationScore": number (1-10),
@@ -137,19 +148,16 @@ async function generateFinalScore(conversationHistory, role, jobDescription) {
           "completionStatus": "complete"|"partial"|"abrupt",
           "breakdown": [{"category":string,"score":number,"comment":string}]
         }
-        Job Role: ${role}`
+        Job Role: ${role}
+        You STRICTLY cannot return anything other than the json`
       },
       ...conversationHistory
     ];
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages,
-      temperature: 0.2
-    });
-
+    const response = await getDeepSeekResponse(messages, true);
+    
     // Extract JSON from the response text
-    const jsonMatch = response.choices[0].message.content.match(/\{[\s\S]*\}/);
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("No JSON found in response");
     return JSON.parse(jsonMatch[0]);
     
