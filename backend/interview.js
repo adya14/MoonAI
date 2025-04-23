@@ -137,37 +137,27 @@ async function getQnAResponse(question, conversationHistory = []) {
 
 async function generateFinalScore(conversationHistory, role, jobDescription) {
   try {
+    const scoringPrompt = getScoringPrompt();
     const messages = [
-      {
-        role: "system",
-        content: `Evaluate this interview and strictly return ONLY a JSON object with these exact fields:
-        {
-          "technicalScore": number (1-10),
-          "communicationScore": number (1-10),
-          "justification": string,
-          "completionStatus": "complete"|"partial"|"abrupt",
-          "breakdown": [{"category":string,"score":number,"comment":string}]
-        }
-        Job Role: ${role}
-        You STRICTLY cannot return anything other than the json`
-      },
+      scoringPrompt,
       ...conversationHistory
     ];
 
+    // Get the raw AI response
     const response = await getDeepSeekResponse(messages, true);
     
-    // Extract JSON from the response text
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON found in response");
-    return JSON.parse(jsonMatch[0]);
-    
+    // Print and return the raw response exactly as received
+    console.log("Raw Scoring Response:", response);
+    return response;
+
   } catch (error) {
     console.error("Error generating score:", error);
     return {
       technicalScore: 0,
       communicationScore: 0,
       justification: "Evaluation failed",
-      completionStatus: "error"
+      completionStatus: "error",
+      breakdown: []
     };
   }
 }

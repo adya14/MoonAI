@@ -61,44 +61,11 @@ const InterviewDetails = () => {
       <div className="score-section">
         <h3>AI Evaluation</h3>
         {candidateData.scoreJustification ? (
-          <div className="evaluation-card">
-            <div className="score-display">
-              <div className="score-circle">
-                <span>{candidateData.score || candidateData.technicalScore}</span>
-                <small>/10</small>
-              </div>
-              <div className="score-label">Overall Score</div>
-            </div>
-
-            <div className="score-details">
-              <h4>Evaluation Summary</h4>
-              <p className="justification">{candidateData.scoreJustification}</p>
-
-              <div className="score-breakdown">
-                <h4>Detailed Scores</h4>
-                <p><strong>Technical:</strong> {candidateData.technicalScore}/10</p>
-                <p><strong>Communication:</strong> {candidateData.communicationScore}/10</p>
-                <p><strong>Status:</strong> {candidateData.completionStatus}</p>
-              </div>
-
-              {candidateData.scoreBreakdown?.length > 0 && (
-                <>
-                  <h4>Category Breakdown</h4>
-                  <ul className="breakdown-list">
-                    {candidateData.scoreBreakdown.map((item, i) => (
-                      <li key={i}>
-                        <strong>{item.category}:</strong> {item.score}/10 - {item.comment}
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </div>
+          <div className="raw-evaluation">
+            <pre>{candidateData.scoreJustification}</pre>
           </div>
         ) : (
-          <div className="no-score">
-            <p>No evaluation available for this interview.</p>
-          </div>
+          <p>No evaluation available for this interview.</p>
         )}
       </div>
 
@@ -107,19 +74,14 @@ const InterviewDetails = () => {
         {candidateData.transcript ? (
           <div className="transcript-content">
             {candidateData.transcript.split('\n\n').map((line, i) => (
-              <div
-                key={i}
-                className={`transcript-line ${line.startsWith('assistant:') ? 'ai-message' : 'user-message'}`}
-              >
-                <span className="speaker">
-                  {line.startsWith('assistant:') ? 'Interviewer' : 'Candidate'}:
-                </span>
-                {line.replace(/^(assistant|user):\s*/, '')}
-              </div>
+              <p key={i} className={line.startsWith('assistant:') ? 'ai-message' : 'user-message'}>
+                <strong>{line.startsWith('assistant:') ? 'Interviewer' : 'Candidate'}:</strong> 
+                {line.replace(/^(assistant|user): /, '')}
+              </p>
             ))}
           </div>
         ) : (
-          <p className="no-transcript">No transcript available for this interview.</p>
+          <p>No transcript available for this interview.</p>
         )}
       </div>
     </div>

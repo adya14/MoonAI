@@ -228,8 +228,7 @@ app.post('/voice', (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
 
   // Greet the user and ask for introduction
-  const greeting = `Hello, My name is Moon. Your AI interviewer for the ${jobRole} role today. In this interview you will be judged on your technical and communication skills. You can press the # key anytime to end the interview or press 1 on the keypad to repeat the question.
-  Let's begin. Can you start by introducing yourself?`;
+  const greeting = `Hello, My name is Moon. Your AI interviewer for the ${jobRole} role today. In this interview you will be judged on your technical and communication skills. Let's begin. Can you start by introducing yourself?`;
   console.log(`[${callSid}] AI: ${greeting}`);
 
   twiml.say(
@@ -452,48 +451,71 @@ app.post('/process-qna', async (req, res) => {
   
   const twiml = new twilio.twiml.VoiceResponse();
 
+  // Handle early termination
+  if (digits === '#') {
+    console.log(`[${callSid}] User ended call during Q&A`);
+    twiml.say({
+      voice: 'Polly.Aditi',
+      language: 'en-IN'
+    }, 'Thank you for your time. Goodbye.');
+    twiml.hangup();
+    await endInterview(callSid);
+    return res.type('text/xml').send(twiml.toString());
+  }
+
+  if (!state) {
+    twiml.say('Interview session not found. Goodbye.');
+    twiml.hangup();
+    return res.type('text/xml').send(twiml.toString());
+  }
+
+  // Check if user had no questions
+  if (!recordingUrl) {
+    console.log(`[${callSid}] User had no questions, ending call`);
+    twiml.say({
+      voice: 'Polly.Aditi',
+      language: 'en-IN'
+    }, 'Thank you for your time! We will review your answers and get back to you soon. Goodbye!');
+    twiml.hangup();
+    await endInterview(callSid);
+    return res.type('text/xml').send(twiml.toString());
+  }
+
+  // Immediately respond to Twilio to prevent timeout
+  twiml.say({
+    voice: 'Polly.Aditi',
+    language: 'en-IN'
+  }, 'Please wait while we process your question.');
+  
+  // Use <Redirect> to check back for the response
+  twiml.redirect({
+    method: 'POST'
+  }, `/process-qna-response?callSid=${callSid}&recordingUrl=${encodeURIComponent(recordingUrl)}`);
+
+  res.type('text/xml').send(twiml.toString());
+});
+
+// New endpoint to handle the AI response after processing
+app.post('/process-qna-response', async (req, res) => {
+  const callSid = req.query.callSid;
+  const recordingUrl = req.query.recordingUrl;
+  const state = interviews.get(callSid);
+  
+  const twiml = new twilio.twiml.VoiceResponse();
+
   try {
-    // Handle early termination
-    if (digits === '#') {
-      console.log(`[${callSid}] User ended call during Q&A`);
-      twiml.say({
-        voice: 'Polly.Aditi',
-        language: 'en-IN'
-      }, 'Thank you for your time. Goodbye.');
-      twiml.hangup();
-      await endInterview(callSid);
-      return res.type('text/xml').send(twiml.toString());
-    }
-
-    if (!state) {
-      throw new Error('Interview state not found');
-    }
-
-    // Check if user had no questions
-    if (!recordingUrl) {
-      console.log(`[${callSid}] User had no questions, ending call`);
-      twiml.say({
-        voice: 'Polly.Aditi',
-        language: 'en-IN'
-      }, 'Thank you for your time! We will review your answers and get back to you soon. Goodbye!');
-      twiml.hangup();
-      await endInterview(callSid);
-      return res.type('text/xml').send(twiml.toString());
-    }
-
-    // Process user's question with timeout
     console.log(`[${callSid}] Processing user question...`);
     const question = await transcribeRecording(recordingUrl, callSid);
     console.log(`[${callSid}] User Question: ${question}`);
     state.history.push({ role: 'user', content: question });
 
-    // Get AI response with timeout protection
+    // Get AI response with shorter timeout
     console.log(`[${callSid}] Generating AI response...`);
     const aiResponse = await Promise.race([
       getQnAResponse(question, state.history),
       new Promise((resolve) => setTimeout(
         () => resolve("Thank you for your question. We'll follow up with more details later."),
-        8000 // 8 second timeout
+        4000 // 4 second timeout to ensure we're under Twilio's 5s
       ))
     ]);
 
@@ -509,8 +531,6 @@ app.post('/process-qna', async (req, res) => {
 
   } catch (error) {
     console.error(`[${callSid}] Q&A Processing Error:`, error);
-    
-    // Fallback response that always works
     twiml.say({
       voice: 'Polly.Aditi',
       language: 'en-IN'
@@ -518,7 +538,6 @@ app.post('/process-qna', async (req, res) => {
     twiml.hangup();
   }
 
-  // Ensure interview is properly ended
   await endInterview(callSid).catch(err => {
     console.error(`[${callSid}] Error in endInterview:`, err);
   });

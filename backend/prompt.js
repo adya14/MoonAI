@@ -25,20 +25,20 @@ function getScoringPrompt() {
     - Interview completion (deduct points if ended abruptly)
     - Response quality to all questions
     
-    Provide JSON output with:
-    {
-      "technicalScore": number,
-      "communicationScore": number,
-      "justification": string,
-      "completionStatus": "complete"|"partial"|"abrupt",
-      "breakdown": [
-        {
-          "question": string,
-          "technicalAssessment": string,
-          "communicationAssessment": string
-        }
-      ]
-    }`
+    Provide your evaluation in this exact format:
+    
+    Technical Score: [score]/10
+    Justification: [technical justification]
+    
+    Communication Score: [score]/10
+    Justification: [communication justification]
+    
+    Interview Completion: [complete/partial/abrupt]
+    
+    Key Observations:
+    - [notable point 1]
+    - [notable point 2]
+    - [notable point 3]`
   };
 }
 

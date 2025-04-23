@@ -9,10 +9,10 @@ async function updateBasicPlanUsers() {
     
     const result = await User.updateMany(
       { plan: "Basic Plan" },
-      { $set: { totalCalls: 2 } }
+      { $set: { totalCalls: 10000 } }
     );
     
-    console.log(`Updated ${result.modifiedCount} Basic Plan users to 2 calls`);
+    console.log(`Updated ${result.modifiedCount}`);
     process.exit(0);
   } catch (error) {
     console.error('Error updating users:', error);
