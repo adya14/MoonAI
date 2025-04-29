@@ -201,6 +201,17 @@ function App() {
               Contact Us
             </Link>
             <Link to="/Dashboard" className="nav-link">Dashboard</Link>
+            <div className="nav-item dropdown group relative inline-block">
+              <span className="nav-link flex items-center gap-1 cursor-pointer">
+                Services
+                <i className="fa-solid fa-sort-down transform transition-transform duration-300 group-hover:rotate-180"></i>
+              </span>
+              <div className="dropdown-content absolute hidden group-hover:block opacity-0 group-hover:opacity-100 transition-all duration-300 transform -translate-y-2 group-hover:translate-y-0">
+                <Link to="/ai-interviews" className="dropdown-link">AI Interviews</Link>
+                <Link to="/ai-customer-service" className="dropdown-link">AI Customer Service</Link>
+              </div>
+            </div>
+
           </div>
         </div>
         <div className="navbar-right">
@@ -242,8 +253,8 @@ function App() {
           <>
             {/* Hero Section */}
             <header className="hero scroll-reveal">
-              <h1>The Future of AI-Powered Interviews</h1>
-              <p>Experience seamless AI-driven phone interviews to automate your recruiting process.</p>
+              <h1>The Future of AI-Powered Calls</h1>
+              <p>Experience seamless AI-driven phone calls for seamless automation</p>
               <div className="hero-buttons">
                 <button
                   className="hero-button get-started"
@@ -294,62 +305,62 @@ function App() {
 
             {/* How It Works Section */}
             <section className="how-it-works">
-              <h2>How It Works</h2>
-              <div className="point point-1 scroll-reveal">
-                <div className="point-content">
-                  <h3>Choose Your Plan</h3>
-                  <p>
-                    Select a subscription that fits your hiring needs. Our flexible plans range from pay-as-you-go to unlimited interviews, with transparent pricing.
-                  </p>
-                </div>
-                <div className="point-number">01</div>
-              </div>
-              <div className="point point-2 scroll-reveal">
-                <div className="point-number">02</div>
-                <div className="point-content">
-                  <h3>Access Your Dashboard</h3>
-                  <p>
-                    After purchasing, you'll land in your dashboard where you can manage interviews, view reports, and schedule new calls with a single click.
-                  </p>
-                </div>
-              </div>
-              <div className="point point-3 scroll-reveal">
-                <div className="point-content">
-                  <h3>Schedule the Interview</h3>
-                  <p>
-                    Click "Schedule Call", pick a time, and fill in candidate details including their phone number and job requirements.
-                  </p>
-                </div>
-                <div className="point-number">03</div>
-              </div>
-              <div className="point point-4 scroll-reveal">
-                <div className="point-number">04</div>
-                <div className="point-content">
-                  <h3>Candidate Receives Call</h3>
-                  <p>
-                    At the scheduled time, our system automatically calls the candidate. No apps needed - they just answer their phone.
-                  </p>
-                </div>
-              </div>
-              <div className="point point-5 scroll-reveal">
-                <div className="point-content">
-                  <h3>AI Conducts Interview</h3>
-                  <p>
-                    Our AI asks role-specific questions, evaluates responses in real-time, and adapts the conversation naturally.
-                  </p>
-                </div>
-                <div className="point-number">05</div>
-              </div>
-              <div className="point point-6 scroll-reveal">
-                <div className="point-number">06</div>
-                <div className="point-content">
-                  <h3>Review & Make Decisions</h3>
-                  <p>
-                    Receive detailed reports with scores on skills, communication, and fit. Compare candidates and hire with confidence.
-                  </p>
-                </div>
-              </div>
-            </section>
+  <h2>How It Works</h2>
+  <div className="point point-1 scroll-reveal">
+    <div className="point-content">
+      <h3>Choose Your Plan</h3>
+      <p>
+        Select between AI Interview calls or AI Customer Service solutions. Our flexible plans range from pay-as-you-go to unlimited calls, with transparent pricing for all needs.
+      </p>
+    </div>
+    <div className="point-number">01</div>
+  </div>
+  <div className="point point-2 scroll-reveal">
+    <div className="point-number">02</div>
+    <div className="point-content">
+      <h3>Access Your Dashboard</h3>
+      <p>
+        After purchasing, you'll land in your dashboard where you can manage all calls, view analytics, and schedule new AI conversations with a single click.
+      </p>
+    </div>
+  </div>
+  <div className="point point-3 scroll-reveal">
+    <div className="point-content">
+      <h3>Schedule the Call</h3>
+      <p>
+        Click "Schedule Call", choose between Interview or Customer Service mode, pick a time, and provide contact details and call parameters.
+      </p>
+    </div>
+    <div className="point-number">03</div>
+  </div>
+  <div className="point point-4 scroll-reveal">
+    <div className="point-number">04</div>
+    <div className="point-content">
+      <h3>Recipient Receives Call</h3>
+      <p>
+        At the scheduled time, our system automatically calls the designated number. No apps needed - they just answer their phone for seamless connection.
+      </p>
+    </div>
+  </div>
+  <div className="point point-5 scroll-reveal">
+    <div className="point-content">
+      <h3>AI Handles the Conversation</h3>
+      <p>
+        Our AI conducts natural conversations tailored to your needs - whether conducting interviews or providing customer support, with real-time adaptation.
+      </p>
+    </div>
+    <div className="point-number">05</div>
+  </div>
+  <div className="point point-6 scroll-reveal">
+    <div className="point-number">06</div>
+    <div className="point-content">
+      <h3>Review Results & Insights</h3>
+      <p>
+        Receive comprehensive reports with conversation analytics, evaluation scores, and actionable insights for both interview and customer service calls.
+      </p>
+    </div>
+  </div>
+</section>
 
             {/* FAQ Section */}
             <section className="faq">

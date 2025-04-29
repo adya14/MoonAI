@@ -74,6 +74,34 @@ body {
   gap: 10px;
 }
 
+.nav-item {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-content {
+  display: none;
+  position: absolute;
+  background-color: rgb(43, 43, 43);
+  min-width: 180px;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  z-index: 1;
+  flex-direction: column;
+}
+
+.dropdown-link {
+  color: rgb(236, 235, 235);
+  padding: 12px 16px;
+  text-decoration: none;
+  display: block;
+  padding: 0.75rem 1rem; /* nice bigger click area */
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.nav-item:hover .dropdown-content {
+  display: flex;
+}
+
 /* Hero Section */
 .hero {
   text-align: center;
