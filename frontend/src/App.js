@@ -201,7 +201,7 @@ function App() {
               Contact Us
             </Link>
             <Link to="/Dashboard" className="nav-link">Dashboard</Link>
-            <div className="nav-item dropdown group relative inline-block">
+            {/* <div className="nav-item dropdown group relative inline-block">
               <span className="nav-link flex items-center gap-1 cursor-pointer">
                 Services
                 <i className="fa-solid fa-sort-down transform transition-transform duration-300 group-hover:rotate-180"></i>
@@ -210,7 +210,7 @@ function App() {
                 <Link to="/ai-interviews" className="dropdown-link">AI Interviews</Link>
                 <Link to="/ai-customer-service" className="dropdown-link">AI Customer Service</Link>
               </div>
-            </div>
+            </div> */}
 
           </div>
         </div>
