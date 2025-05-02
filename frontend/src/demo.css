@@ -1,0 +1,218 @@
+/* Import Google Fonts (Ensure this is loaded) */
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Merriweather:wght@700&display=swap');
+
+/* Main layout for the demo section */
+.web-demo-split-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60px 5%;
+  margin: 40px 0;
+  font-family: "Lato", sans-serif;
+}
+
+/* Centered H2 Heading */
+.web-demo-split-layout h2 {
+  font-family: "Merriweather", serif;
+  font-size: 2.4em;
+  margin-bottom: 40px;
+  color: #333;
+  text-align: center;
+  width: 100%;
+}
+
+/* Container for the two columns */
+.demo-columns-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 40px;
+    width: 100%;
+    justify-content: center;
+}
+
+/* Left column for text and button */
+.web-demo-content-left {
+  flex: 1;
+  min-width: 300px;
+  max-width: 500px;
+  text-align: left;
+  padding-left: 5%;
+}
+
+.web-demo-content-left p {
+  font-size: 1.1em;
+  color: #555;
+  margin-bottom: 30px;
+  line-height: 1.6;
+}
+
+/* Right column for the animation */
+.web-demo-animation-right {
+  flex: 1;
+  min-width: 300px;
+  max-width: 400px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px; /* Increased height for orb */
+  position: relative; /* Needed for absolute positioning of orbs */
+}
+
+/* --- NEW ORB ANIMATION STYLES --- */
+
+.orb-container {
+    position: relative;
+    width: 150px; /* Orb size */
+    height: 150px; /* Orb size */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* --- Find and Modify these Orb Styles --- */
+
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  /* --- CHANGE these lines --- */
+  opacity: 0.4; /* Make it visible when idle */
+  transform: scale(0.9); /* Set idle size (slightly smaller) */
+  /* transition: opacity 0.5s ease-out, transform 0.5s ease-out; */ /* REMOVE transition */
+  /* --- End of changes --- */
+  background: radial-gradient(circle at 30% 30%, rgba(0, 123, 255, 0.8), rgba(0, 86, 179, 0.6) 70%, transparent 100%);
+  mix-blend-mode: screen;
+  will-change: transform, opacity;
+}
+
+/* Define sizes for layered orbs (No changes here) */
+.orb-1 { width: 100%; height: 100%; }
+.orb-2 { width: 80%; height: 80%; }
+.orb-3 { width: 60%; height: 60%; }
+
+/* Animation keyframes */
+@keyframes pulse-orb {
+0%, 100% {
+  /* State matches idle state */
+  transform: scale(0.9);
+  opacity: 0.4;
+}
+50% {
+  /* Pulsed state */
+  transform: scale(1.1);
+  opacity: 0.8; /* Slightly increased opacity */
+}
+}
+
+/* Apply animation ONLY when active */
+.web-demo-animation-right.active .orb {
+  /* --- REMOVE explicit opacity/transform here --- */
+  /* opacity: 0.6; */
+  /* transform: scale(1); */
+  /* --- Just apply the animation --- */
+  animation: pulse-orb 2s infinite ease-in-out;
+}
+
+/* Stagger animations for layers (No changes needed here) */
+.web-demo-animation-right.active .orb-1 {
+  animation-duration: 2.5s;
+  animation-delay: 0s;
+}
+.web-demo-animation-right.active .orb-2 {
+  animation-duration: 2.2s;
+  animation-delay: 0.3s;
+}
+.web-demo-animation-right.active .orb-3 {
+  animation-duration: 1.9s;
+  animation-delay: 0.6s;
+}
+
+/* --- END OF ORB STYLES --- */
+
+/* Button Styles (adjusted margins/alignment if needed) */
+.demo-start-button {
+  padding: 15px 30px;
+  font-size: 1.1em;
+  font-weight: bold;
+  color: #fff;
+  background-color: #2b2b2c;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease, opacity 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  font-family: "Lato", sans-serif;
+}
+.demo-start-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.demo-start-button:hover:not(:disabled) {
+  background-color: #0056b3;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.demo-start-button:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.demo-start-button.user-speaking {
+  background-color: #dc3545;
+  animation: pulse-button 1.5s infinite ease-in-out; /* Renamed from pulse */
+}
+.demo-start-button.user-speaking:hover:not(:disabled) {
+     background-color: #c82333;
+}
+
+@keyframes pulse-button { /* Renamed from pulse */
+  0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); transform: scale(1); }
+  70% { box-shadow: 0 0 0 15px rgba(220, 53, 69, 0); transform: scale(1.05); }
+  100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); transform: scale(1); }
+}
+
+/* Status Text Styles */
+.demo-status {
+    margin-top: 20px;
+    font-style: italic;
+    color: #666;
+    min-height: 1.2em;
+    text-align: left;
+    font-family: "Lato", sans-serif;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .web-demo-split-layout h2 {
+      font-size: 2em;
+  }
+  .demo-columns-container {
+      flex-direction: column;
+      gap: 30px;
+  }
+  .web-demo-content-left,
+  .web-demo-animation-right {
+    flex: none;
+    width: 100%;
+    max-width: none;
+    text-align: center;
+    padding-left: 0;
+  }
+   .web-demo-content-left p {
+     margin-left: auto;
+     margin-right: auto;
+     max-width: 90%;
+   }
+   .demo-status {
+       text-align: center;
+   }
+   .web-demo-animation-right {
+     margin-top: 30px;
+   }
+}

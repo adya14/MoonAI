@@ -8,6 +8,7 @@ import "./App.css";
 import inverted_logo from "./images/logo_inverted.png"
 import logo from "./images/logo.png";
 import Pricing from "./Pricing";
+import Demo from "./demo"
 import Contact from "./Contact";
 import Scheduler from "./Scheduler";
 import Dashboard from "./Dashboard";
@@ -301,66 +302,67 @@ function App() {
               </div>
             </section>
 
+            <Demo></Demo>
             <Pricing></Pricing>
 
             {/* How It Works Section */}
             <section className="how-it-works">
-  <h2>How It Works</h2>
-  <div className="point point-1 scroll-reveal">
-    <div className="point-content">
-      <h3>Choose Your Plan</h3>
-      <p>
-        Select between AI Interview calls or AI Customer Service solutions. Our flexible plans range from pay-as-you-go to unlimited calls, with transparent pricing for all needs.
-      </p>
-    </div>
-    <div className="point-number">01</div>
-  </div>
-  <div className="point point-2 scroll-reveal">
-    <div className="point-number">02</div>
-    <div className="point-content">
-      <h3>Access Your Dashboard</h3>
-      <p>
-        After purchasing, you'll land in your dashboard where you can manage all calls, view analytics, and schedule new AI conversations with a single click.
-      </p>
-    </div>
-  </div>
-  <div className="point point-3 scroll-reveal">
-    <div className="point-content">
-      <h3>Schedule the Call</h3>
-      <p>
-        Click "Schedule Call", choose between Interview or Customer Service mode, pick a time, and provide contact details and call parameters.
-      </p>
-    </div>
-    <div className="point-number">03</div>
-  </div>
-  <div className="point point-4 scroll-reveal">
-    <div className="point-number">04</div>
-    <div className="point-content">
-      <h3>Recipient Receives Call</h3>
-      <p>
-        At the scheduled time, our system automatically calls the designated number. No apps needed - they just answer their phone for seamless connection.
-      </p>
-    </div>
-  </div>
-  <div className="point point-5 scroll-reveal">
-    <div className="point-content">
-      <h3>AI Handles the Conversation</h3>
-      <p>
-        Our AI conducts natural conversations tailored to your needs - whether conducting interviews or providing customer support, with real-time adaptation.
-      </p>
-    </div>
-    <div className="point-number">05</div>
-  </div>
-  <div className="point point-6 scroll-reveal">
-    <div className="point-number">06</div>
-    <div className="point-content">
-      <h3>Review Results & Insights</h3>
-      <p>
-        Receive comprehensive reports with conversation analytics, evaluation scores, and actionable insights for both interview and customer service calls.
-      </p>
-    </div>
-  </div>
-</section>
+              <h2>How It Works</h2>
+              <div className="point point-1 scroll-reveal">
+                <div className="point-content">
+                  <h3>Choose Your Plan</h3>
+                  <p>
+                    Select between AI Interview calls or AI Customer Service solutions. Our flexible plans range from pay-as-you-go to unlimited calls, with transparent pricing for all needs.
+                  </p>
+                </div>
+                <div className="point-number">01</div>
+              </div>
+              <div className="point point-2 scroll-reveal">
+                <div className="point-number">02</div>
+                <div className="point-content">
+                  <h3>Access Your Dashboard</h3>
+                  <p>
+                    After purchasing, you'll land in your dashboard where you can manage all calls, view analytics, and schedule new AI conversations with a single click.
+                  </p>
+                </div>
+              </div>
+              <div className="point point-3 scroll-reveal">
+                <div className="point-content">
+                  <h3>Schedule the Call</h3>
+                  <p>
+                    Click "Schedule Call", choose between Interview or Customer Service mode, pick a time, and provide contact details and call parameters.
+                  </p>
+                </div>
+                <div className="point-number">03</div>
+              </div>
+              <div className="point point-4 scroll-reveal">
+                <div className="point-number">04</div>
+                <div className="point-content">
+                  <h3>Recipient Receives Call</h3>
+                  <p>
+                    At the scheduled time, our system automatically calls the designated number. No apps needed - they just answer their phone for seamless connection.
+                  </p>
+                </div>
+              </div>
+              <div className="point point-5 scroll-reveal">
+                <div className="point-content">
+                  <h3>AI Handles the Conversation</h3>
+                  <p>
+                    Our AI conducts natural conversations tailored to your needs - whether conducting interviews or providing customer support, with real-time adaptation.
+                  </p>
+                </div>
+                <div className="point-number">05</div>
+              </div>
+              <div className="point point-6 scroll-reveal">
+                <div className="point-number">06</div>
+                <div className="point-content">
+                  <h3>Review Results & Insights</h3>
+                  <p>
+                    Receive comprehensive reports with conversation analytics, evaluation scores, and actionable insights for both interview and customer service calls.
+                  </p>
+                </div>
+              </div>
+            </section>
 
             {/* FAQ Section */}
             <section className="faq">
