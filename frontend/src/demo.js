@@ -116,7 +116,9 @@ const Demo = () => {
     console.log("Sending audio blob:", audioBlob);
     const formData = new FormData();
     formData.append('audio', audioBlob, 'user_speech.wav');
-
+    const backendBaseUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000'; // Use your local backend port if different
+    const apiUrl = `${backendBaseUrl}/api/web-call/process-web-audio`;
+    console.log(`Sending audio to backend at: ${apiUrl}`); 
     try {
       const response = await fetch('/api/web-call/process-web-audio', {
         method: 'POST',
