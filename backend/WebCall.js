@@ -8,8 +8,6 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-// ** REMOVE the require('franc') from here **
-
 const router = express.Router();
 
 // --- Configuration ---
@@ -111,11 +109,7 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
              else throw new Error("Failed to get response from AI via OpenRouter.");
         }
 
-
-      // --- 2.5 Detect Language of AI Response ---
-      // ** USE DYNAMIC IMPORT HERE **
       const { franc } = await import('franc');
-      // *****************************
       const detectedLangCode = franc(aiResponseText, { minLength: 3 });
       console.log(`Detected language code: ${detectedLangCode}`);
 
