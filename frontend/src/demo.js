@@ -188,7 +188,6 @@ const Demo = () => {
       }
   }, [cleanupVAD, processAudioChunk, resumeListening]);
 
-
   const stopConversation = useCallback(() => {
       console.log("Stopping conversation...");
       setConversationState('idle');
