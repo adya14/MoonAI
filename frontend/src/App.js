@@ -9,6 +9,7 @@ import inverted_logo from "./images/logo_inverted.png"
 import logo from "./images/logo.png";
 import Pricing from "./Pricing";
 import Contact from "./Contact";
+import Demo from "./demo"
 import Scheduler from "./Scheduler";
 import Dashboard from "./Dashboard";
 import LegalPages from "./LegalPages";
@@ -300,7 +301,7 @@ function App() {
                 </div>
               </div>
             </section>
-
+            <Demo></Demo>
             <Pricing></Pricing>
 
             {/* How It Works Section */}

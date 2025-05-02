@@ -11,6 +11,7 @@ const authRoutes = require('./routes/authRoutes');
 const cors = require('cors');
 const User = require("./models/user");
 const interviews = new Map();
+const webCallRouter = require('./WebCall');
 const ScheduledCall = require("./models/ScheduledCall");
 const nodemailer = require('nodemailer');
 require('dotenv').config();
@@ -51,7 +52,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 }));
-
+app.use('/api/web-call', webCallRouter);
 // Connect to MongoDB
 connectDB();
 
@@ -1096,20 +1097,17 @@ server.listen(PORT, () => {
   let backendUrl = process.env.BACKEND_URL;
    if (backendUrl && !backendUrl.startsWith('http')) { backendUrl = `https://${backendUrl}`; }
    if(backendUrl) {
-       console.log(`Twilio should POST call status to: ${backendUrl}/call-status`);
-       console.log(`Twilio should POST initial call TwiML to: ${backendUrl}/voice`);
-       console.log(`WebSocket server expects connections at: ${backendUrl.replace(/^http/, 'ws')}`);
+      //  console.log(`Twilio should POST call status to: ${backendUrl}/call-status`);
+      //  console.log(`Twilio should POST initial call TwiML to: ${backendUrl}/voice`);
+      //  console.log(`WebSocket server expects connections at: ${backendUrl.replace(/^http/, 'ws')}`);
    } else { console.error("Warning: BACKEND_URL environment variable not set."); }
 });
 
 // Graceful Shutdown Handling
 const gracefulShutdown = (signal) => {
-  console.log(`\nReceived ${signal}. Closing server gracefully...`);
   server.close(() => {
-    console.log('HTTP server closed.');
     wss.close(() => { console.log('WebSocket server closed.'); });
     mongoose.connection.close(false).then(() => { // Removed deprecated 'false' argument if using Mongoose >= 7
-        console.log('MongoDB connection closed.');
         process.exit(0);
     }).catch(err => {
         console.error('Error closing MongoDB connection:', err);
