@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './demo.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faMicrophone, faStop, faSpinner } from '@fortawesome/free-solid-svg-icons';
-import { MicVAD, utils } from "@ricky0123/vad-web";
+import { faMicrophone, faStop} from '@fortawesome/free-solid-svg-icons';
+import { MicVAD} from "@ricky0123/vad-web";
 
 // Helper function encodeWAV (remains the same)
 function encodeWAV(samples, sampleRate) {
@@ -120,7 +120,7 @@ const Demo = () => {
     const apiUrl = `${backendBaseUrl}/api/web-call/process-web-audio`;
     console.log(`Sending audio to backend at: ${apiUrl}`); 
     try {
-      const response = await fetch('/api/web-call/process-web-audio', {
+      const response = await fetch(apiUrl, {
         method: 'POST',
         body: formData,
       });

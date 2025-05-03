@@ -27,12 +27,12 @@ const InterviewDetails = () => {
     return statusMap[candidateData.status] || statusMap[candidateData.terminationReason] || 'Unknown';
   };
 
-  const formatDuration = (seconds) => {
-    if (!seconds) return 'N/A';
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}m ${secs}s`;
-  };
+  // const formatDuration = (seconds) => {
+  //   if (!seconds) return 'N/A';
+  //   const mins = Math.floor(seconds / 60);
+  //   const secs = seconds % 60;
+  //   return `${mins}m ${secs}s`;
+  // };
 
   return (
     <div className="interview-details-container">

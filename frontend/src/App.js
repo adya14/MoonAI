@@ -161,12 +161,12 @@ function App() {
     setIsAuthModalOpen(false);
   };
 
-  const ProtectedRoute = ({ children }) => {
-    if (!isAuthenticated) {
-      return <Navigate to="/" replace />;
-    }
-    return children;
-  };
+  // const ProtectedRoute = ({ children }) => {
+  //   if (!isAuthenticated) {
+  //     return <Navigate to="/" replace />;
+  //   }
+  //   return children;
+  // };
 
   return (
     <div className="container-fluid">
