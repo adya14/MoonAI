@@ -15,12 +15,11 @@ const router = express.Router();
 const { WaveFile } = require('wavefile');
 
 // --- Google Cloud Text-to-Speech Client ---
-// We keep the client initialization code here in case you want to re-enable it later.
 const { TextToSpeechClient } = require('@google-cloud/text-to-speech');
 let textToSpeechClient;
 try {
     textToSpeechClient = new TextToSpeechClient();
-    console.log("Google Cloud TextToSpeechClient initialized successfully (but is currently disabled for TTS synthesis).");
+    console.log("Google Cloud TextToSpeechClient initialized successfully.");
 } catch (e) {
     console.error("Failed to initialize Google Cloud TextToSpeechClient. Ensure GOOGLE_APPLICATION_CREDENTIALS is set correctly.", e);
     // If this fails, textToSpeechClient will be undefined, and the code will fallback to browser TTS.
@@ -32,35 +31,28 @@ const openai = new OpenAI({
 });
 const openRouterApiKey = process.env.DEEPSEEK_API;
 
-// --- Google Cloud Voice Mapping (kept for potential future use) ---
+// --- Google Cloud Voice Mapping ---
+// Note: You can customize these voices. For the most natural voices, use 'Studio' or 'Wavenet' types.
+// e.g., 'en-US-Studio-O' for a premium female voice.
 const francToGoogleVoiceConfig = {
-  'eng': { languageCode: 'en-US', name: 'en-US-Standard-C', ssmlGender: 'FEMALE' },
-  'hin': { languageCode: 'hi-IN', name: 'hi-IN-Standard-C', ssmlGender: 'FEMALE' },
-  'und': { languageCode: 'en-US', name: 'en-US-Standard-C', ssmlGender: 'FEMALE' }
+  'eng': { languageCode: 'en-US', name: 'en-US-Studio-O', ssmlGender: 'FEMALE' },
+  'hin': { languageCode: 'hi-IN', name: 'hi-IN-Wavenet-C', ssmlGender: 'FEMALE' },
+  'und': { languageCode: 'en-US', name: 'en-US-Studio-O', ssmlGender: 'FEMALE' }
 };
-const defaultGoogleVoiceConfig = { languageCode: 'en-US', name: 'en-US-Standard-C', ssmlGender: 'FEMALE' };
+const defaultGoogleVoiceConfig = { languageCode: 'en-US', name: 'en-US-Studio-O', ssmlGender: 'FEMALE' };
+
 
 const openRouterUrl = "https://openrouter.ai/api/v1/chat/completions";
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 // --- Helper Function to Trim Trailing Silence ---
-/**
- * Trims trailing silence from an audio buffer (PCM data).
- * @param {Int16Array} samples The PCM audio samples.
- * @param {number} sampleRate The sample rate of the audio.
- * @param {number} silenceThreshold RMS amplitude considered as silence (e.g., 0.01 for normalized -1 to 1).
- * @param {number} minSilenceDurationSec Minimum duration of silence at the end to trim (in seconds).
- * @returns {Int16Array} The trimmed PCM audio samples.
- */
 function trimTrailingSilence(samples, sampleRate, silenceThreshold = 0.005, minSilenceDurationSec = 0.7) {
     if (!samples || samples.length === 0) {
         return samples;
     }
-
     const minSilenceSamples = Math.floor(minSilenceDurationSec * sampleRate);
     let lastNonSilentSampleIndex = samples.length - 1;
-
     for (let i = samples.length - 1; i >= 0; i--) {
         const normalizedSample = samples[i] / 32768;
         if (Math.abs(normalizedSample) > silenceThreshold) {
@@ -68,18 +60,16 @@ function trimTrailingSilence(samples, sampleRate, silenceThreshold = 0.005, minS
             break;
         }
     }
-
     const trailingSilenceSamples = samples.length - 1 - lastNonSilentSampleIndex;
     if (trailingSilenceSamples >= minSilenceSamples) {
         console.log(`Trimming ${trailingSilenceSamples / sampleRate}s of trailing silence.`);
         return samples.slice(0, lastNonSilentSampleIndex + 1);
     }
-
     console.log("No significant trailing silence to trim or speech ends at the very end.");
     return samples;
 }
 
-// --- Helper Function to call Google Cloud TTS API (kept for potential future use) ---
+// --- Helper Function to call Google Cloud TTS API ---
 async function getGoogleCloudTTS(text, voiceConfig) {
     if (!textToSpeechClient) {
         const error = new Error("Google Cloud TextToSpeechClient not initialized.");
@@ -94,7 +84,7 @@ async function getGoogleCloudTTS(text, voiceConfig) {
             languageCode: effectiveVoiceConfig.languageCode,
             name: effectiveVoiceConfig.name,
         },
-        audioConfig: { audioEncoding: 'MP3' },
+        audioConfig: { audioEncoding: 'MP3' }, // MP3 is a good balance of quality and size.
     };
     try {
         const [response] = await textToSpeechClient.synthesizeSpeech(request);
@@ -130,11 +120,11 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
                      console.warn("Received invalid conversation history format, resetting.");
                      conversationHistory = [{ role: "system", content: "You are a helpful assistant and your name is Moon. Respond naturally in the language appropriate to the user's query or context, unless specifically asked otherwise. Keep responses concise. Keep responses short 5-6 lines maximum. Strictly do not include any emojis of special unecessary characters" }];
                 }
-                 const MAX_HISTORY_TURNS = 10; // Each turn is a user message + AI response
-                 if (conversationHistory.length > (MAX_HISTORY_TURNS * 2) + 1) { // +1 for system message
+                 const MAX_HISTORY_TURNS = 10;
+                 if (conversationHistory.length > (MAX_HISTORY_TURNS * 2) + 1) {
                       conversationHistory = [
-                          conversationHistory[0], // Keep system message
-                          ...conversationHistory.slice(-(MAX_HISTORY_TURNS * 2)) // Keep last N turns
+                          conversationHistory[0],
+                          ...conversationHistory.slice(-(MAX_HISTORY_TURNS * 2))
                       ];
                       console.log("Truncated conversation history.");
                  }
@@ -146,7 +136,7 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
              conversationHistory = [{ role: "system", content: "You are a helpful assistant and your name is Moon. Respond naturally in the language appropriate to the user's query or context, unless specifically asked otherwise. Keep responses concise. Keep responses short 5-6 lines maximum. Strictly do not include any emojis of special unecessary characters" }];
         }
 
-        // --- 1. Audio Pre-processing (Silence Trimming) & Transcription ---
+        // --- 1. Audio Pre-processing & Transcription ---
         console.log("Received audio. Processing for silence trimming...");
         let audioBufferToTranscribe = req.file.buffer;
 
@@ -155,14 +145,11 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
             if (wav.fmt.sampleRate !== 16000 || wav.fmt.numChannels !== 1 || wav.bitDepth !== '16') {
                  console.warn(`Received audio with format: ${wav.fmt.sampleRate}Hz, ${wav.fmt.numChannels}ch, ${wav.bitDepth}bit. Silence trimming expects 16-bit mono @ 16kHz for best results with current settings.`);
             }
-
-            if (wav.bitDepth === '16' && wav.fmt.numChannels === 1) { // Only process if it's 16-bit mono PCM
+            if (wav.bitDepth === '16' && wav.fmt.numChannels === 1) {
                 const pcmSamples = wav.getSamples(false, Int16Array);
                 const trimmedSamples = trimTrailingSilence(pcmSamples, wav.fmt.sampleRate, 0.005, 0.7);
-
                 if (trimmedSamples.length < pcmSamples.length && trimmedSamples.length > 0) {
                     const trimmedWav = new WaveFile();
-                    // Ensure the sample rate used here matches what Whisper expects (typically 16000)
                     trimmedWav.fromScratch(1, wav.fmt.sampleRate, '16', trimmedSamples);
                     audioBufferToTranscribe = trimmedWav.toBuffer();
                     console.log("Audio trimmed. Original size:", req.file.buffer.length, "Trimmed size:", audioBufferToTranscribe.length);
@@ -172,7 +159,7 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
                     console.log("No significant trailing silence trimmed.");
                 }
             } else {
-                console.warn(`Audio is not 16-bit mono PCM (${wav.bitDepth}-bit, ${wav.fmt.numChannels}ch), skipping silence trimming. Ensure frontend sends 16-bit mono PCM WAV for trimming.`);
+                console.warn(`Audio is not 16-bit mono PCM (${wav.bitDepth}-bit, ${wav.fmt.numChannels}ch), skipping silence trimming.`);
             }
         } catch (waveError) {
             console.error("Error processing WAV for silence trimming. Using original audio.", waveError);
@@ -226,17 +213,25 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
         }
 
         // --- 3. Synthesize AI Response ---
-        // --- GOOGLE CLOUD TTS IS DISABLED FOR COST SAVING ---
-        const ttsSuccessful = false; // <<< FORCE TTS TO FAIL for now
         let audioStream = null;
-        // let ttsErrorDetails = new Error("Premium TTS (Google Cloud) is disabled for testing. Using browser TTS.");
+        let ttsErrorDetails = null;
+        let ttsSuccessful = false;
+
+        try {
+             // Attempt to use Google Cloud TTS
+             console.log("Attempting to synthesize audio with Google Cloud TTS...");
+             audioStream = await getGoogleCloudTTS(aiResponseText, null); // Use default voice for now
+             ttsSuccessful = true;
+        } catch(ttsError) {
+             console.error("Could not synthesize audio with Google Cloud TTS, falling back to browser.", ttsError);
+             ttsErrorDetails = ttsError;
+             ttsSuccessful = false;
+        }
 
         // --- 4. Send Response ---
-        // Because `ttsSuccessful` is now always false, the code will always execute the `else` block.
         if (ttsSuccessful && audioStream) {
-             // This block will NOT be reached as long as ttsSuccessful is false
              console.log("Streaming Google Cloud audio response to frontend.");
-             res.setHeader('Content-Type', 'audio/mpeg');
+             res.setHeader('Content-Type', 'audio/mpeg'); // Changed to audio/mpeg for MP3
              res.setHeader('X-AI-Response-Text', encodeURIComponent(aiResponseText));
              res.setHeader('X-User-Transcription', encodeURIComponent(userText));
              audioStream.pipe(res);
@@ -248,14 +243,14 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
                  else if (audioStream.unpipe) audioStream.unpipe(res);
              });
         } else {
-            // --- This block WILL ALWAYS be reached due to ttsSuccessful = false ---
             // Fallback: Send JSON response with AI text for browser TTS
-            console.log("Premium TTS disabled. Using fallback: Sending JSON response for browser TTS.");
+            console.log("TTS synthesis failed or disabled. Using fallback: Sending JSON response for browser TTS.");
             res.status(200).json({
-                message: "Premium TTS synthesis disabled. Using browser speech.", // Clearer message
+                message: "Premium TTS synthesis failed. Using browser speech.", // Clearer message
                 aiResponseText: aiResponseText,
                 ttsFallback: true, // This tells the frontend to use its own TTS
-                userTranscription: userText
+                userTranscription: userText,
+                error: ttsErrorDetails ? ttsErrorDetails.message : "TTS was disabled or failed."
             });
         }
 

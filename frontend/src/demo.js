@@ -31,16 +31,16 @@ function encodeWAV(samples, sampleRate) {
 
 
 const Demo = () => {
-    // --- VAD & RECORDING CONSTANTS - TUNE THESE! ---
-    const SPEECH_THRESHOLD = 0.03;      // Volume threshold to start detecting speech. Lower is more sensitive.
-    const INTERRUPTION_THRESHOLD = 0.15; // Volume threshold to detect user interruption over AI speech. MUST be higher than SPEECH_THRESHOLD.
-    const SILENCE_DELAY_MS = 1000;      // How long to wait in silence before sending the audio.
-    const MIN_RECORDING_DURATION_MS = 250; // Minimum audio length (ms) to send to backend.
-    const VAD_SAMPLE_RATE = 16000;      // Sample rate for VAD analysis and Whisper.
-    const VAD_BUFFER_SIZE = 1024;       // ScriptProcessorNode buffer size.
+    // --- VAD & RECORDING CONSTANTS ---
+    const SPEECH_THRESHOLD = 0.03;
+    const INTERRUPTION_THRESHOLD = 0.15;
+    const SILENCE_DELAY_MS = 1000;
+    const MIN_RECORDING_DURATION_MS = 250;
+    const VAD_SAMPLE_RATE = 16000;
+    const VAD_BUFFER_SIZE = 1024;
 
     // --- State Management ---
-    const [conversationState, setConversationState] = useState('idle'); // idle, listening, user_speaking, ai_speaking, processing
+    const [conversationState, setConversationState] = useState('idle');
     const [statusText, setStatusText] = useState('Click the microphone to start the demo.');
 
     // --- Refs for Audio Processing ---
@@ -48,11 +48,11 @@ const Demo = () => {
     const mediaStreamSourceRef = useRef(null);
     const scriptProcessorRef = useRef(null);
     const userAudioStreamRef = useRef(null);
-    const audioPlayerRef = useRef(null);
+    const audioPlayerRef = useRef(new Audio()); // Use a ref for the persistent audio player
     const silenceTimeoutRef = useRef(null);
     const recordedAudioRef = useRef([]);
 
-    // --- Conversation History ---
+    // --- Conversation History & TTS ---
     const [messages, setMessages] = useState([
         { role: "system", content: "You are a helpful assistant and your name is Moon. Respond naturally in the language appropriate to the user's query or context, unless specifically asked otherwise. Keep responses concise. Keep responses short 5-6 lines maximum. Strictly do not include any emojis of special unecessary characters" }
     ]);
@@ -62,7 +62,7 @@ const Demo = () => {
 
     useEffect(() => {
         conversationStateRef.current = conversationState;
-        console.log("Conversation state changed to:", conversationState); // For debugging
+        console.log("Conversation state changed to:", conversationState);
     }, [conversationState]);
 
     const stopAudioProcessingPipeline = useCallback(() => {
@@ -104,12 +104,13 @@ const Demo = () => {
 
     const stopAiAudioPlayback = useCallback(() => {
         let wasSpeaking = false;
-        if (audioPlayerRef.current) {
+        // Stop streamed audio player
+        if (audioPlayerRef.current && !audioPlayerRef.current.paused) {
             audioPlayerRef.current.pause();
-            audioPlayerRef.current.src = '';
-            audioPlayerRef.current = null;
+            audioPlayerRef.current.src = ''; // Detach the source
             wasSpeaking = true;
         }
+        // Stop browser TTS
         if (synthesisRef.current && synthesisRef.current.speaking) {
             synthesisRef.current.cancel();
             currentUtteranceRef.current = null;
@@ -118,6 +119,36 @@ const Demo = () => {
         if(wasSpeaking) console.log("AI audio playback stopped.");
         return wasSpeaking;
     }, []);
+
+    const playStreamedAudioAndResumeListen = useCallback((audioBlob) => {
+        stopAiAudioPlayback(); // Ensure nothing else is playing
+        setConversationState('ai_speaking');
+        setStatusText('AI Speaking...');
+        
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const player = audioPlayerRef.current;
+        player.src = audioUrl;
+        player.play().catch(e => {
+            console.error("Error playing streamed audio:", e);
+            resumeListening(); // If play fails, go back to listening
+        });
+
+        player.onended = () => {
+            console.log("Streamed audio finished.");
+            URL.revokeObjectURL(audioUrl); // Clean up the object URL
+            if (conversationStateRef.current === 'ai_speaking') {
+                resumeListening();
+            }
+        };
+
+        player.onerror = (e) => {
+            console.error("Audio player error:", e);
+            URL.revokeObjectURL(audioUrl);
+            if (conversationStateRef.current === 'ai_speaking') {
+                resumeListening();
+            }
+        };
+    }, [stopAiAudioPlayback, resumeListening]);
 
     const playBrowserTTSAndResumeListen = useCallback((text) => {
         if (!text || text.trim() === "") {
@@ -128,7 +159,7 @@ const Demo = () => {
         stopAiAudioPlayback();
         setConversationState('ai_speaking');
         setStatusText('AI Speaking...');
-        console.log("AI Speaking (Browser TTS):", text);
+        console.log("AI Speaking (Browser TTS Fallback):", text);
 
         const utterance = new SpeechSynthesisUtterance(text);
         currentUtteranceRef.current = utterance;
@@ -153,7 +184,7 @@ const Demo = () => {
     const processAudio = useCallback(async (audioBuffer) => {
         const audioDurationMs = (audioBuffer.length / VAD_SAMPLE_RATE) * 1000;
         if (!audioBuffer || audioBuffer.length === 0 || audioDurationMs < MIN_RECORDING_DURATION_MS) {
-            console.log(`Audio too short (${audioDurationMs.toFixed(0)}ms) or empty. Min duration: ${MIN_RECORDING_DURATION_MS}ms. Resuming listening.`);
+            console.log(`Audio too short (${audioDurationMs.toFixed(0)}ms). Resuming listening.`);
             resumeListening();
             return;
         }
@@ -176,26 +207,34 @@ const Demo = () => {
                 throw new Error(errorData.error || `Server error! Status: ${response.status}`);
             }
 
+            // Get text from headers, regardless of content type
+            const userTranscription = decodeURIComponent(response.headers.get('X-User-Transcription') || "");
+            const aiResponseText = decodeURIComponent(response.headers.get('X-AI-Response-Text') || "");
+
+            // Update conversation history as soon as we get the text
+            if (userTranscription) setMessages(prev => [...prev, { role: "user", content: userTranscription }]);
+            if (aiResponseText) setMessages(prev => [...prev, { role: "assistant", content: aiResponseText }]);
+
             const contentType = response.headers.get('Content-Type');
-            const userTranscriptionEncoded = response.headers.get('X-User-Transcription');
-            const userTranscription = userTranscriptionEncoded ? decodeURIComponent(userTranscriptionEncoded) : "";
 
-            if (userTranscription && userTranscription.trim() !== "") {
-                setMessages(prevMessages => [...prevMessages, { role: "user", content: userTranscription }]);
-            }
+            // SCENARIO 1: We received streamed audio from Google TTS
+            if (contentType?.includes('audio/mpeg')) {
+                 console.log("Received streamed audio response. Playing now.");
+                 const audioBlob = await response.blob();
+                 playStreamedAudioAndResumeListen(audioBlob);
 
-            if (contentType?.includes('application/json')) {
+            // SCENARIO 2: We received a JSON response (TTS fallback or no speech)
+            } else if (contentType?.includes('application/json')) {
                 const responseBody = await response.json();
-                const aiResponseText = responseBody.aiResponseText;
-
+                console.log("Received JSON response (TTS fallback).", responseBody.message);
                 if (responseBody.message && responseBody.message.toLowerCase().includes('silence or no speech')) {
-                     console.log("Backend/Whisper detected no speech or silence for user input.");
+                     console.log("Backend detected no speech. Resuming listening.");
+                     setMessages(prev => prev.slice(0, -1)); // Remove empty user message
                      resumeListening();
-                     return;
+                } else {
+                     playBrowserTTSAndResumeListen(responseBody.aiResponseText);
                 }
-                playBrowserTTSAndResumeListen(aiResponseText);
             } else {
-                console.error("Received unexpected (non-JSON) response when expecting browser TTS fallback.");
                 throw new Error(`Received unexpected response content type: ${contentType}`);
             }
         } catch (error) {
@@ -203,106 +242,88 @@ const Demo = () => {
             setStatusText(`Error: ${error.message}. Resuming...`);
             resumeListening();
         }
-    }, [messages, resumeListening, playBrowserTTSAndResumeListen]);
+    }, [messages, resumeListening, playBrowserTTSAndResumeListen, playStreamedAudioAndResumeListen]);
 
     const handleAudioProcess = useCallback((event) => {
-        if (!audioContextRef.current || scriptProcessorRef.current === null) { // Ensure scriptProcessor is still active
-            // console.log("handleAudioProcess called but audio context/processor is not active.");
-            return;
-        }
-
+        if (!audioContextRef.current || scriptProcessorRef.current === null) return;
+        
         const inputBuffer = event.inputBuffer.getChannelData(0);
         let sum = 0.0;
         for (let i = 0; i < inputBuffer.length; i++) {
             sum += inputBuffer[i] * inputBuffer[i];
         }
         const rms = Math.sqrt(sum / inputBuffer.length);
-
         const currentState = conversationStateRef.current;
 
         if (currentState === 'ai_speaking') {
             if (rms > INTERRUPTION_THRESHOLD) {
                 console.log(`INTERRUPTION DETECTED over AI! RMS: ${rms.toFixed(4)}`);
-                stopAiAudioPlayback(); // Stop AI
-                recordedAudioRef.current = [...inputBuffer]; // Start new recording with this chunk
-                setConversationState('user_speaking');       // Transition to user speaking
+                stopAiAudioPlayback();
+                recordedAudioRef.current = [...inputBuffer];
+                setConversationState('user_speaking');
                 setStatusText('Listening (interrupted AI)...');
                 if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
                 silenceTimeoutRef.current = null;
             }
-            // IMPORTANT: If not interrupting, do absolutely nothing. Don't record, don't set timers.
             return;
         }
 
         if (currentState === 'listening') {
             if (rms > SPEECH_THRESHOLD) {
                 console.log(`User speech started. RMS: ${rms.toFixed(4)}`);
-                recordedAudioRef.current = [...inputBuffer]; // Start new recording
+                recordedAudioRef.current = [...inputBuffer];
                 setConversationState('user_speaking');
-                setStatusText('Listening...'); // Or "User speaking..."
+                setStatusText('Listening...');
             }
-            // If below threshold, do nothing, just continue listening.
             return;
         }
 
         if (currentState === 'user_speaking') {
-            recordedAudioRef.current.push(...inputBuffer); // Continue accumulating audio
+            recordedAudioRef.current.push(...inputBuffer);
 
-            if (rms < SPEECH_THRESHOLD) { // Potential end of speech
-                if (!silenceTimeoutRef.current) { // Start silence timer only if not already started
+            if (rms < SPEECH_THRESHOLD) {
+                if (!silenceTimeoutRef.current) {
                     silenceTimeoutRef.current = setTimeout(() => {
-                        console.log(`Silence detected for ${SILENCE_DELAY_MS}ms after user speech. Processing.`);
+                        console.log(`Silence detected for ${SILENCE_DELAY_MS}ms. Processing.`);
                         const completeAudio = new Float32Array(recordedAudioRef.current);
-                        recordedAudioRef.current = []; // Clear buffer for next utterance
-                        silenceTimeoutRef.current = null; // Clear the timer ID
-
-                        // Only process if we are still in 'user_speaking' state (haven't been interrupted or stopped)
+                        recordedAudioRef.current = [];
+                        silenceTimeoutRef.current = null;
                         if (conversationStateRef.current === 'user_speaking') {
                            processAudio(completeAudio);
                         } else {
-                           console.log("Silence timer fired, but state changed from 'user_speaking'. Not processing. Current state:", conversationStateRef.current);
-                           resumeListening(); // Or transition to idle if demo was stopped
+                           console.log("Silence timer fired, but state changed. Not processing.");
+                           resumeListening();
                         }
                     }, SILENCE_DELAY_MS);
                 }
-            } else { // User is still speaking loudly (rms >= SPEECH_THRESHOLD)
-                if (silenceTimeoutRef.current) { // If there was a silence timer, clear it
+            } else {
+                if (silenceTimeoutRef.current) {
                     clearTimeout(silenceTimeoutRef.current);
                     silenceTimeoutRef.current = null;
                 }
             }
         }
     }, [processAudio, stopAiAudioPlayback, resumeListening]);
-
+    
     const startDemo = useCallback(async () => {
         if (conversationStateRef.current !== 'idle') {
-            console.log("Demo is already running or processing. Current state:", conversationStateRef.current);
+            console.log("Demo is already running.");
             return;
         }
         console.log("Attempting to start demo...");
-        setStatusText('Initializing microphone...');
-         // Reset conversation history when starting a new demo session
+        setStatusText('Initializing...');
         setMessages([{ role: "system", content: "You are a helpful assistant and your name is Moon. Respond naturally in the language appropriate to the user's query or context, unless specifically asked otherwise. Keep responses concise. Keep responses short 5-6 lines maximum. Strictly do not include any emojis of special unecessary characters" }]);
-
 
         try {
             if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-                console.log("Closing existing AudioContext before starting new one.");
                 await audioContextRef.current.close();
-                audioContextRef.current = null;
             }
             if (userAudioStreamRef.current) {
                 userAudioStreamRef.current.getTracks().forEach(track => track.stop());
-                userAudioStreamRef.current = null;
             }
             
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    sampleRate: VAD_SAMPLE_RATE,
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
-                }
+                audio: { sampleRate: VAD_SAMPLE_RATE, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
             });
             userAudioStreamRef.current = stream;
 
@@ -315,19 +336,17 @@ const Demo = () => {
             
             const processor = context.createScriptProcessor(VAD_BUFFER_SIZE, 1, 1);
             scriptProcessorRef.current = processor;
-
             processor.onaudioprocess = handleAudioProcess;
-
             source.connect(processor);
             processor.connect(context.destination);
 
-            setConversationState('listening'); // Set to listening AFTER successful setup
+            setConversationState('listening');
             setStatusText('Listening...');
-            console.log("Demo started successfully. Listening...");
+            console.log("Demo started successfully.");
 
         } catch (error) {
-            console.error("Failed to start demo (getUserMedia or AudioContext):", error);
-            setStatusText('Error starting demo. Check microphone permissions.');
+            console.error("Failed to start demo:", error);
+            setStatusText('Error: Check microphone permissions.');
             setConversationState('idle');
             stopAudioProcessingPipeline();
         }
@@ -348,7 +367,7 @@ const Demo = () => {
             stopDemo();
         };
     }, [stopDemo]);
-
+    
     const isDemoActive = conversationState !== 'idle';
     let buttonIcon = faMicrophone;
     let buttonText = "Start Demo";
@@ -368,7 +387,7 @@ const Demo = () => {
             <h2>Try Our AI Voice Demo</h2>
             <div className="demo-columns-container">
                 <div className="web-demo-content-left">
-                    <p>Click "Start Demo" to begin. Speak naturally and the AI will respond when you pause.</p>
+                    <p>Click "Start Demo" to begin. Speak naturally and the AI will respond when you pause. You can interrupt the AI by speaking over it.</p>
                     <button
                         className={`demo-start-button ${isDemoActive && conversationState !== 'processing' ? 'is-recording' : ''}`}
                         onClick={isDemoActive ? stopDemo : startDemo}
@@ -388,10 +407,10 @@ const Demo = () => {
                     </div>
                 </div>
             </div>
-            <div style={{ marginTop: '20px', textAlign: 'left', maxHeight: '200px', overflowY: 'auto', border: '1px solid #ccc', padding: '10px', fontSize: '0.8em' }}>
+            <div style={{ marginTop: '20px', textAlign: 'left', maxHeight: '200px', overflowY: 'auto', border: '1px solid #ccc', padding: '10px', fontSize: '0.8em', borderRadius: '8px' }}>
                 {messages.slice(1).map((msg, index) => (
-                    <div key={index} style={{ marginBottom: '5px', color: msg.role === 'user' ? 'blue' : 'green' }}>
-                        <strong>{msg.role === 'user' ? 'You: ' : 'Moon: '}</strong>{msg.content}
+                    <div key={index} style={{ marginBottom: '8px', paddingLeft: '5px', borderLeft: `3px solid ${msg.role === 'user' ? '#007bff' : '#28a745'}` }}>
+                        <strong style={{ color: msg.role === 'user' ? '#007bff' : '#28a745' }}>{msg.role === 'user' ? 'You: ' : 'Moon: '}</strong>{msg.content}
                     </div>
                 ))}
             </div>
