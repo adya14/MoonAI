@@ -46,6 +46,19 @@ const openRouterUrl = "https://openrouter.ai/api/v1/chat/completions";
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
+// --- Helper to send data chunks in [length][type][payload] format ---
+const CHUNK_TYPE = { TEXT: 0, AUDIO: 1 };
+
+function sendChunk(res, type, payload) {
+    const payloadLength = Buffer.byteLength(payload);
+    const header = Buffer.alloc(5);
+    // Use Big-Endian format for network byte order
+    header.writeUInt32BE(payloadLength, 0); 
+    header.writeUInt8(type, 4);
+    res.write(header);
+    res.write(payload);
+}
+
 // --- Helper Function to Trim Trailing Silence ---
 function trimTrailingSilence(samples, sampleRate, silenceThreshold = 0.005, minSilenceDurationSec = 0.7) {
     if (!samples || samples.length === 0) {
@@ -70,36 +83,19 @@ function trimTrailingSilence(samples, sampleRate, silenceThreshold = 0.005, minS
 }
 
 // --- Helper Function to call Google Cloud TTS API ---
-async function getGoogleCloudTTS(text, voiceConfig) {
-    if (!textToSpeechClient) {
-        const error = new Error("Google Cloud TextToSpeechClient not initialized.");
-        error.status = 500;
-        throw error;
-    }
+// --- Google Cloud TTS API Call (Now returns a stream) ---
+async function getGoogleCloudTTSStream(text, voiceConfig) {
+    if (!textToSpeechClient) throw new Error("Google TTS Client not initialized.");
     const effectiveVoiceConfig = voiceConfig || defaultGoogleVoiceConfig;
-    console.log(`Attempting Google Cloud TTS with Language: ${effectiveVoiceConfig.languageCode}, Voice: ${effectiveVoiceConfig.name}`);
     const request = {
-        input: { text: text },
-        voice: {
-            languageCode: effectiveVoiceConfig.languageCode,
-            name: effectiveVoiceConfig.name,
-        },
-        audioConfig: { audioEncoding: 'MP3' }, // MP3 is a good balance of quality and size.
+        input: { text },
+        voice: { languageCode: effectiveVoiceConfig.languageCode, name: effectiveVoiceConfig.name },
+        audioConfig: { audioEncoding: 'MP3' },
     };
-    try {
-        const [response] = await textToSpeechClient.synthesizeSpeech(request);
-        const bufferStream = new Readable();
-        bufferStream.push(response.audioContent);
-        bufferStream.push(null);
-        console.log('Google Cloud TTS successful.');
-        return bufferStream;
-    } catch (error) {
-        console.error("Google Cloud TTS API Call Error:", error);
-        const gcpError = new Error(`Google Cloud TTS failed: ${error.message}`);
-        gcpError.isGoogleCloudError = true;
-        gcpError.originalError = error;
-        throw gcpError;
-    }
+    // The response contains the audio content buffer.
+    const [response] = await textToSpeechClient.synthesizeSpeech(request);
+    // Convert the buffer into a readable stream for piping.
+    return Readable.from(response.audioContent);
 }
 
 // --- Main API Route ---
@@ -189,27 +185,94 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
             throw new Error("Failed to transcribe audio.");
         }
 
-        // --- 2. Get AI Response ---
-        console.log("Getting AI response via OpenRouter...");
-        if (!openRouterApiKey) throw new Error("AI API key (DEEPSEEK_API) not configured.");
+        // --- 2. Start Streaming Response to Client ---
+        // Set the headers for a chunked, binary stream.
+        res.writeHead(200, {
+            'Content-Type': 'application/octet-stream', // Sending binary data
+            'Connection': 'keep-alive',
+            'Cache-Control': 'no-cache',
+            'X-User-Transcription': encodeURIComponent(userText) // Send transcription once
+        });
+
+        // --- 3. Get AI Response (Streaming) and Pipe to TTS ---
+        const messagesForAI = [...conversationHistory, { role: "user", content: userText }];
+        
+        const openRouterPayload = { 
+            model: "deepseek/deepseek-chat", 
+            messages: messagesForAI, 
+            temperature: 0.7, 
+            stream: true // Enable streaming
+        };
         const openRouterHeaders = {
-            "Content-Type": "application/json", "Authorization": `Bearer ${openRouterApiKey}`,
+            "Authorization": `Bearer ${openRouterApiKey}`,
             "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:3000",
             "X-Title": "MoonAI Web Demo",
         };
-        const messagesForAI = [...conversationHistory, { role: "user", content: userText }];
-        const openRouterPayload = { model: "deepseek/deepseek-chat", messages: messagesForAI, max_tokens: 1000, temperature: 0.7 };
-        try {
-            const openRouterResponse = await axios.post(openRouterUrl, openRouterPayload, { headers: openRouterHeaders });
-            aiResponseText = openRouterResponse.data.choices[0]?.message?.content?.trim();
-            console.log("OpenRouter AI Response Text:", aiResponseText);
-            if (!aiResponseText) throw new Error('AI response format invalid or empty.');
-        } catch (error) {
-            console.error("OpenRouter API Axios Error:", error.isAxiosError ? { status: error.response?.status, data: error.response?.data, message: error.message } : error);
-            let errorMessage = "Failed to get response from AI via OpenRouter.";
-            if (error.response?.status === 401) errorMessage = "OpenRouter authentication failed. Check your API key (DEEPSEEK_API).";
-            else if (error.response?.status === 429) errorMessage = "OpenRouter rate limit hit or free tier exhausted.";
-            throw new Error(errorMessage);
+
+        // Use axios to get a response stream
+        const llmStreamResponse = await axios.post(openRouterUrl, openRouterPayload, {
+            headers: openRouterHeaders,
+            responseType: 'stream'
+        });
+
+        let sentenceBuffer = '';
+        const llmStream = llmStreamResponse.data;
+
+        // Process the stream from the LLM
+        for await (const chunk of llmStream) {
+            const lines = chunk.toString('utf8').split('\n').filter(line => line.trim().startsWith('data:'));
+            
+            for (const line of lines) {
+                const data = line.replace(/^data: /, '').trim();
+                
+                // Check for the end-of-stream signal
+                if (data === '[DONE]') {
+                    // If any text remains in the buffer, process it as the final sentence
+                    if (sentenceBuffer.trim()) {
+                        const textToSpeak = sentenceBuffer.trim();
+                        sendChunk(res, CHUNK_TYPE.TEXT, JSON.stringify({ text: textToSpeak }));
+                        const audioStream = await getGoogleCloudTTSStream(textToSpeak);
+                        for await (const audioChunk of audioStream) {
+                            sendChunk(res, CHUNK_TYPE.AUDIO, audioChunk);
+                        }
+                    }
+                    res.end(); // IMPORTANT: Close the connection to the client
+                    return; // Exit the function
+                }
+                
+                // Parse the JSON data from the stream
+                try {
+                    const parsed = JSON.parse(data);
+                    const delta = parsed.choices[0]?.delta?.content || '';
+                    if (delta) {
+                        sentenceBuffer += delta;
+                        // Use a regex to find sentences ending with . ? !
+                        const sentenceEndRegex = /(?<=[.?!])\s+/;
+                        let sentences = sentenceBuffer.split(sentenceEndRegex);
+
+                        // If we have at least one complete sentence
+                        if (sentences.length > 1) {
+                            const completeSentences = sentences.slice(0, -1);
+                            sentenceBuffer = sentences[sentences.length - 1]; // Keep the remainder
+                            
+                            for (const textToSpeak of completeSentences) {
+                                if (textToSpeak.trim()) {
+                                     // 1. Send the text chunk to the frontend
+                                     sendChunk(res, CHUNK_TYPE.TEXT, JSON.stringify({ text: textToSpeak }));
+                                     // 2. Get the audio stream for that text
+                                     const audioStream = await getGoogleCloudTTSStream(textToSpeak);
+                                     // 3. Stream the audio chunks to the frontend
+                                     for await (const audioChunk of audioStream) {
+                                        sendChunk(res, CHUNK_TYPE.AUDIO, audioChunk);
+                                     }
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error parsing LLM stream chunk:", e);
+                }
+            }
         }
 
         // --- 3. Synthesize AI Response ---

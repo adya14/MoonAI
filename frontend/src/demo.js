@@ -51,6 +51,12 @@ const Demo = () => {
     const audioPlayerRef = useRef(new Audio()); // Use a ref for the persistent audio player
     const silenceTimeoutRef = useRef(null);
     const recordedAudioRef = useRef([]);
+    // --- Refs for MediaSource Streaming ---
+    const mediaSourceRef = useRef(null);
+    const sourceBufferRef = useRef(null);
+    const audioQueue = useRef([]); // A queue to hold audio chunks
+    const isAppendingBuffer = useRef(false); 
+    const CHUNK_TYPE = { TEXT: 0, AUDIO: 1 };
 
     // --- Conversation History & TTS ---
     const [messages, setMessages] = useState([
@@ -91,6 +97,26 @@ const Demo = () => {
         }
     }, []);
 
+    const processAudioQueue = useCallback(() => {
+        // Do nothing if we are already appending or the queue is empty
+        if (isAppendingBuffer.current || audioQueue.current.length === 0) {
+            return;
+        }
+        // Do nothing if the SourceBuffer is not ready or is already updating
+        if (!sourceBufferRef.current || sourceBufferRef.current.updating) {
+            return;
+        }
+
+        isAppendingBuffer.current = true;
+        const audioChunk = audioQueue.current.shift();
+        try {
+            sourceBufferRef.current.appendBuffer(audioChunk);
+        } catch (e) {
+            console.error("Error appending buffer:", e);
+            isAppendingBuffer.current = false; // Reset flag on error
+        }
+    }, []);
+
     const resumeListening = useCallback(() => {
         const currentState = conversationStateRef.current;
         if (currentState !== 'processing' && currentState !== 'user_speaking') {
@@ -104,19 +130,22 @@ const Demo = () => {
 
     const stopAiAudioPlayback = useCallback(() => {
         let wasSpeaking = false;
-        // Stop streamed audio player
         if (audioPlayerRef.current && !audioPlayerRef.current.paused) {
             audioPlayerRef.current.pause();
-            audioPlayerRef.current.src = ''; // Detach the source
             wasSpeaking = true;
         }
-        // Stop browser TTS
-        if (synthesisRef.current && synthesisRef.current.speaking) {
-            synthesisRef.current.cancel();
-            currentUtteranceRef.current = null;
-            wasSpeaking = true;
+        // Safely end the MediaSource stream if it's open
+        if (mediaSourceRef.current && mediaSourceRef.current.readyState === 'open') {
+            try {
+                mediaSourceRef.current.endOfStream();
+            } catch(e) {
+                console.warn("Could not end MediaSource stream:", e.message);
+            }
         }
-        if(wasSpeaking) console.log("AI audio playback stopped.");
+        // Reset streaming state
+        audioQueue.current = [];
+        isAppendingBuffer.current = false;
+        if(wasSpeaking) console.log("AI audio playback and streaming stopped.");
         return wasSpeaking;
     }, []);
 
@@ -182,68 +211,106 @@ const Demo = () => {
     }, [stopAiAudioPlayback, resumeListening]);
 
     const processAudio = useCallback(async (audioBuffer) => {
+        // Keep the initial part of the function (duration check, setting state, creating FormData)
         const audioDurationMs = (audioBuffer.length / VAD_SAMPLE_RATE) * 1000;
-        if (!audioBuffer || audioBuffer.length === 0 || audioDurationMs < MIN_RECORDING_DURATION_MS) {
-            console.log(`Audio too short (${audioDurationMs.toFixed(0)}ms). Resuming listening.`);
-            resumeListening();
-            return;
+        if (audioDurationMs < MIN_RECORDING_DURATION_MS) {
+            return resumeListening();
         }
-
         setConversationState('processing');
-        setStatusText('Processing your speech...');
-
+        setStatusText('Thinking...');
         const wavBlob = encodeWAV(audioBuffer, VAD_SAMPLE_RATE);
         const formData = new FormData();
         formData.append('audio', wavBlob, 'user_speech.wav');
         formData.append('history', JSON.stringify(messages));
-
         const backendBaseUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
         const apiUrl = `${backendBaseUrl}/api/web-call/process-web-audio`;
 
         try {
             const response = await fetch(apiUrl, { method: 'POST', body: formData });
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: `Server error! Status: ${response.status}` }));
-                throw new Error(errorData.error || `Server error! Status: ${response.status}`);
-            }
+            if (!response.ok) throw new Error(`Server error: ${response.statusText}`);
 
-            // Get text from headers, regardless of content type
+            // --- Handle streamed response ---
             const userTranscription = decodeURIComponent(response.headers.get('X-User-Transcription') || "");
-            const aiResponseText = decodeURIComponent(response.headers.get('X-AI-Response-Text') || "");
-
-            // Update conversation history as soon as we get the text
-            if (userTranscription) setMessages(prev => [...prev, { role: "user", content: userTranscription }]);
-            if (aiResponseText) setMessages(prev => [...prev, { role: "assistant", content: aiResponseText }]);
-
-            const contentType = response.headers.get('Content-Type');
-
-            // SCENARIO 1: We received streamed audio from Google TTS
-            if (contentType?.includes('audio/mpeg')) {
-                 console.log("Received streamed audio response. Playing now.");
-                 const audioBlob = await response.blob();
-                 playStreamedAudioAndResumeListen(audioBlob);
-
-            // SCENARIO 2: We received a JSON response (TTS fallback or no speech)
-            } else if (contentType?.includes('application/json')) {
-                const responseBody = await response.json();
-                console.log("Received JSON response (TTS fallback).", responseBody.message);
-                if (responseBody.message && responseBody.message.toLowerCase().includes('silence or no speech')) {
-                     console.log("Backend detected no speech. Resuming listening.");
-                     setMessages(prev => prev.slice(0, -1)); // Remove empty user message
-                     resumeListening();
-                } else {
-                     playBrowserTTSAndResumeListen(responseBody.aiResponseText);
-                }
-            } else {
-                throw new Error(`Received unexpected response content type: ${contentType}`);
+            if (userTranscription) {
+                setMessages(prev => [...prev, { role: "user", content: userTranscription }]);
             }
+            // Add a placeholder for the AI's response that we will fill incrementally
+            // setMessages(prev => [...prev, { role: "assistant", content: "" }]);
+            
+            setConversationState('ai_speaking');
+            setStatusText('AI Speaking...');
+
+            // 1. Setup MediaSource
+            mediaSourceRef.current = new MediaSource();
+            audioPlayerRef.current.src = URL.createObjectURL(mediaSourceRef.current);
+            audioPlayerRef.current.play().catch(e => console.error("Audio play failed:", e));
+            
+            // 2. Add event listeners for MediaSource
+            mediaSourceRef.current.addEventListener('sourceopen', () => {
+                const mimeCodec = 'audio/mpeg';
+                sourceBufferRef.current = mediaSourceRef.current.addSourceBuffer(mimeCodec);
+                // This event tells us the buffer is ready for more data
+                sourceBufferRef.current.addEventListener('updateend', () => {
+                    isAppendingBuffer.current = false;
+                    processAudioQueue(); // Process the next chunk in our queue
+                });
+                // 3. Start reading the stream from the backend
+                readStream(response.body.getReader());
+            });
+            
+            audioPlayerRef.current.onended = () => {
+                 console.log("Audio playback finished.");
+                 resumeListening();
+            };
+
         } catch (error) {
-            console.error("Error processing audio:", error);
+            console.error("Error in processAudio:", error);
             setStatusText(`Error: ${error.message}. Resuming...`);
             resumeListening();
         }
-    }, [messages, resumeListening, playBrowserTTSAndResumeListen, playStreamedAudioAndResumeListen]);
 
+        // --- New nested function to parse our custom stream format ---
+        async function readStream(reader) {
+            let buffer = new Uint8Array();
+
+            while (true) {
+                try {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        if (mediaSourceRef.current.readyState === 'open' && !sourceBufferRef.current.updating) {
+                            mediaSourceRef.current.endOfStream();
+                        }
+                        break;
+                    }
+                    // Add incoming data to our buffer
+                    buffer = new Uint8Array([...buffer, ...value]);
+                    
+                    // Process all complete chunks in the buffer
+                    while (buffer.length >= 5) {
+                        const view = new DataView(buffer.buffer, buffer.byteOffset, 5);
+                        const payloadLength = view.getUint32(0, false); // Read length (BE)
+                        const type = view.getUint8(4);
+
+                        if (buffer.length >= 5 + payloadLength) {
+                            const payload = buffer.slice(5, 5 + payloadLength);
+                            buffer = buffer.slice(5 + payloadLength); // Consume the chunk
+
+                            if (type === CHUNK_TYPE.AUDIO) {
+                                audioQueue.current.push(payload);
+                                processAudioQueue();
+                            }
+                        } else {
+                            break; // Not enough data for a full chunk, wait for more
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error reading stream:", e);
+                    break;
+                }
+            }
+        }
+    }, [messages, resumeListening, processAudioQueue]);
+    
     const handleAudioProcess = useCallback((event) => {
         if (!audioContextRef.current || scriptProcessorRef.current === null) return;
         
