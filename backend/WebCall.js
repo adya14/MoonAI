@@ -230,6 +230,7 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
                     // If any text remains in the buffer, process it as the final sentence
                     if (sentenceBuffer.trim()) {
                         const textToSpeak = sentenceBuffer.trim();
+                        console.log(`AI Sentence (Terminal): "${textToSpeak}"`);
                         sendChunk(res, CHUNK_TYPE.TEXT, JSON.stringify({ text: textToSpeak }));
                         const audioStream = await getGoogleCloudTTSStream(textToSpeak);
                         for await (const audioChunk of audioStream) {
@@ -257,14 +258,15 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
                             
                             for (const textToSpeak of completeSentences) {
                                 if (textToSpeak.trim()) {
-                                     // 1. Send the text chunk to the frontend
-                                     sendChunk(res, CHUNK_TYPE.TEXT, JSON.stringify({ text: textToSpeak }));
-                                     // 2. Get the audio stream for that text
-                                     const audioStream = await getGoogleCloudTTSStream(textToSpeak);
-                                     // 3. Stream the audio chunks to the frontend
-                                     for await (const audioChunk of audioStream) {
-                                        sendChunk(res, CHUNK_TYPE.AUDIO, audioChunk);
-                                     }
+                                    console.log(`AI Sentence (Terminal): "${textToSpeak}"`);
+                                    // 1. Send the text chunk to the frontend
+                                    sendChunk(res, CHUNK_TYPE.TEXT, JSON.stringify({ text: textToSpeak }));
+                                    // 2. Get the audio stream for that text
+                                    const audioStream = await getGoogleCloudTTSStream(textToSpeak);
+                                    // 3. Stream the audio chunks to the frontend
+                                    for await (const audioChunk of audioStream) {
+                                       sendChunk(res, CHUNK_TYPE.AUDIO, audioChunk);
+                                    }
                                 }
                             }
                         }
