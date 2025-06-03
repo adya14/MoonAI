@@ -1,5 +1,3 @@
-// Filename: WebCall.js
-
 require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
@@ -10,8 +8,6 @@ const path = require('path');
 const os = require('os');
 const { Readable } = require('stream');
 const router = express.Router();
-
-// --- Audio Processing Library ---
 const { WaveFile } = require('wavefile');
 
 // --- Google Cloud Text-to-Speech Client ---
@@ -27,19 +23,19 @@ try {
 
 // --- Configuration ---
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.OPENAI_API_KEY,
 });
 const openRouterApiKey = process.env.DEEPSEEK_API;
 
 // --- Google Cloud Voice Mapping ---
-// Note: You can customize these voices. For the most natural voices, use 'Studio' or 'Wavenet' types.
-// e.g., 'en-US-Studio-O' for a premium female voice.
+// --- Google Cloud Voice Mapping ---
 const francToGoogleVoiceConfig = {
-  'eng': { languageCode: 'en-US', name: 'en-US-Studio-O', ssmlGender: 'FEMALE' },
-  'hin': { languageCode: 'hi-IN', name: 'hi-IN-Wavenet-C', ssmlGender: 'FEMALE' },
-  'und': { languageCode: 'en-US', name: 'en-US-Studio-O', ssmlGender: 'FEMALE' }
+    'eng': { languageCode: 'en-US', name: 'en-US-Wavenet-D', ssmlGender: 'FEMALE' },
+    'hin': { languageCode: 'hi-IN', name: 'hi-IN-Wavenet-D', ssmlGender: 'FEMALE' },
+    // Default to English if language is undetermined
+    'und': { languageCode: 'en-US', name: 'en-US-Wavenet-D', ssmlGender: 'FEMALE' }
 };
-const defaultGoogleVoiceConfig = { languageCode: 'en-US', name: 'en-US-Studio-O', ssmlGender: 'FEMALE' };
+const defaultGoogleVoiceConfig = { languageCode: 'en-US', name: 'en-US-Wavenet-D', ssmlGender: 'FEMALE' };
 
 
 const openRouterUrl = "https://openrouter.ai/api/v1/chat/completions";
@@ -53,7 +49,7 @@ function sendChunk(res, type, payload) {
     const payloadLength = Buffer.byteLength(payload);
     const header = Buffer.alloc(5);
     // Use Big-Endian format for network byte order
-    header.writeUInt32BE(payloadLength, 0); 
+    header.writeUInt32BE(payloadLength, 0);
     header.writeUInt8(type, 4);
     res.write(header);
     res.write(payload);
@@ -113,23 +109,23 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
             try {
                 conversationHistory = JSON.parse(req.body.history);
                 if (!Array.isArray(conversationHistory) || !conversationHistory.every(msg => typeof msg === 'object' && 'role' in msg && 'content' in msg)) {
-                     console.warn("Received invalid conversation history format, resetting.");
-                     conversationHistory = [{ role: "system", content: "You are a helpful assistant and your name is Moon. Respond naturally in the language appropriate to the user's query or context, unless specifically asked otherwise. Keep responses concise. Keep responses short 5-6 lines maximum. Strictly do not include any emojis of special unecessary characters" }];
+                    console.warn("Received invalid conversation history format, resetting.");
+                    conversationHistory = [{ role: "system", content: "You are a helpful assistant and your name is Moon. Respond naturally in the language appropriate to the user's query or context, unless specifically asked otherwise. Keep responses concise. Keep responses short 5-6 lines maximum. Strictly do not include any emojis of special unecessary characters" }];
                 }
-                 const MAX_HISTORY_TURNS = 10;
-                 if (conversationHistory.length > (MAX_HISTORY_TURNS * 2) + 1) {
-                      conversationHistory = [
-                          conversationHistory[0],
-                          ...conversationHistory.slice(-(MAX_HISTORY_TURNS * 2))
-                      ];
-                      console.log("Truncated conversation history.");
-                 }
+                const MAX_HISTORY_TURNS = 10;
+                if (conversationHistory.length > (MAX_HISTORY_TURNS * 2) + 1) {
+                    conversationHistory = [
+                        conversationHistory[0],
+                        ...conversationHistory.slice(-(MAX_HISTORY_TURNS * 2))
+                    ];
+                    console.log("Truncated conversation history.");
+                }
             } catch (parseError) {
                 console.error("Error parsing conversation history:", parseError);
-                 conversationHistory = [{ role: "system", content: "You are a helpful assistant and your name is Moon. Respond naturally in the language appropriate to the user's query or context, unless specifically asked otherwise. Keep responses concise. Keep responses short 5-6 lines maximum. Strictly do not include any emojis of special unecessary characters" }];
+                conversationHistory = [{ role: "system", content: "You are a helpful assistant and your name is Moon. Respond naturally in the language appropriate to the user's query or context, unless specifically asked otherwise. Keep responses concise. Keep responses short 5-6 lines maximum. Strictly do not include any emojis of special unecessary characters" }];
             }
         } else {
-             conversationHistory = [{ role: "system", content: "You are a helpful assistant and your name is Moon. Respond naturally in the language appropriate to the user's query or context, unless specifically asked otherwise. Keep responses concise. Keep responses short 5-6 lines maximum. Strictly do not include any emojis of special unecessary characters" }];
+            conversationHistory = [{ role: "system", content: "You are a helpful assistant and your name is Moon. Respond naturally in the language appropriate to the user's query or context, unless specifically asked otherwise. Keep responses concise. Keep responses short 5-6 lines maximum. Strictly do not include any emojis of special unecessary characters" }];
         }
 
         // --- 1. Audio Pre-processing & Transcription ---
@@ -139,7 +135,7 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
         try {
             const wav = new WaveFile(req.file.buffer);
             if (wav.fmt.sampleRate !== 16000 || wav.fmt.numChannels !== 1 || wav.bitDepth !== '16') {
-                 console.warn(`Received audio with format: ${wav.fmt.sampleRate}Hz, ${wav.fmt.numChannels}ch, ${wav.bitDepth}bit. Silence trimming expects 16-bit mono @ 16kHz for best results with current settings.`);
+                console.warn(`Received audio with format: ${wav.fmt.sampleRate}Hz, ${wav.fmt.numChannels}ch, ${wav.bitDepth}bit. Silence trimming expects 16-bit mono @ 16kHz for best results with current settings.`);
             }
             if (wav.bitDepth === '16' && wav.fmt.numChannels === 1) {
                 const pcmSamples = wav.getSamples(false, Int16Array);
@@ -196,11 +192,11 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
 
         // --- 3. Get AI Response (Streaming) and Pipe to TTS ---
         const messagesForAI = [...conversationHistory, { role: "user", content: userText }];
-        
-        const openRouterPayload = { 
-            model: "deepseek/deepseek-chat", 
-            messages: messagesForAI, 
-            temperature: 0.7, 
+
+        const openRouterPayload = {
+            model: "deepseek/deepseek-chat",
+            messages: messagesForAI,
+            temperature: 0.7,
             stream: true // Enable streaming
         };
         const openRouterHeaders = {
@@ -208,7 +204,8 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
             "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:3000",
             "X-Title": "MoonAI Web Demo",
         };
-
+        
+        const { franc } = await import('franc');
         // Use axios to get a response stream
         const llmStreamResponse = await axios.post(openRouterUrl, openRouterPayload, {
             headers: openRouterHeaders,
@@ -221,10 +218,10 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
         // Process the stream from the LLM
         for await (const chunk of llmStream) {
             const lines = chunk.toString('utf8').split('\n').filter(line => line.trim().startsWith('data:'));
-            
+
             for (const line of lines) {
                 const data = line.replace(/^data: /, '').trim();
-                
+
                 // Check for the end-of-stream signal
                 if (data === '[DONE]') {
                     // If any text remains in the buffer, process it as the final sentence
@@ -232,6 +229,10 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
                         const textToSpeak = sentenceBuffer.trim();
                         console.log(`AI Sentence (Terminal): "${textToSpeak}"`);
                         sendChunk(res, CHUNK_TYPE.TEXT, JSON.stringify({ text: textToSpeak }));
+                        // --- LANGUAGE DETECTION LOGIC ---
+                        const langCode = franc(textToSpeak);
+                        const voiceConfig = francToGoogleVoiceConfig[langCode] || defaultGoogleVoiceConfig;
+                        // --- END OF LOGIC ---
                         const audioStream = await getGoogleCloudTTSStream(textToSpeak);
                         for await (const audioChunk of audioStream) {
                             sendChunk(res, CHUNK_TYPE.AUDIO, audioChunk);
@@ -240,7 +241,7 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
                     res.end(); // IMPORTANT: Close the connection to the client
                     return; // Exit the function
                 }
-                
+
                 // Parse the JSON data from the stream
                 try {
                     const parsed = JSON.parse(data);
@@ -255,17 +256,20 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
                         if (sentences.length > 1) {
                             const completeSentences = sentences.slice(0, -1);
                             sentenceBuffer = sentences[sentences.length - 1]; // Keep the remainder
-                            
+
+                            // This is the NEW code with language detection
                             for (const textToSpeak of completeSentences) {
                                 if (textToSpeak.trim()) {
                                     console.log(`AI Sentence (Terminal): "${textToSpeak}"`);
-                                    // 1. Send the text chunk to the frontend
-                                    sendChunk(res, CHUNK_TYPE.TEXT, JSON.stringify({ text: textToSpeak }));
-                                    // 2. Get the audio stream for that text
-                                    const audioStream = await getGoogleCloudTTSStream(textToSpeak);
-                                    // 3. Stream the audio chunks to the frontend
+
+                                    // --- LANGUAGE DETECTION LOGIC ---
+                                    const langCode = franc(textToSpeak);
+                                    const voiceConfig = francToGoogleVoiceConfig[langCode] || defaultGoogleVoiceConfig;
+                                    // --- END OF LOGIC ---
+
+                                    const audioStream = await getGoogleCloudTTSStream(textToSpeak, voiceConfig);
                                     for await (const audioChunk of audioStream) {
-                                       sendChunk(res, CHUNK_TYPE.AUDIO, audioChunk);
+                                        sendChunk(res, CHUNK_TYPE.AUDIO, audioChunk);
                                     }
                                 }
                             }
@@ -283,30 +287,30 @@ router.post('/process-web-audio', upload.single('audio'), async (req, res) => {
         let ttsSuccessful = false;
 
         try {
-             // Attempt to use Google Cloud TTS
-             console.log("Attempting to synthesize audio with Google Cloud TTS...");
-             audioStream = await getGoogleCloudTTS(aiResponseText, null); // Use default voice for now
-             ttsSuccessful = true;
-        } catch(ttsError) {
-             console.error("Could not synthesize audio with Google Cloud TTS, falling back to browser.", ttsError);
-             ttsErrorDetails = ttsError;
-             ttsSuccessful = false;
+            // Attempt to use Google Cloud TTS
+            console.log("Attempting to synthesize audio with Google Cloud TTS...");
+            audioStream = await getGoogleCloudTTS(aiResponseText, null); // Use default voice for now
+            ttsSuccessful = true;
+        } catch (ttsError) {
+            console.error("Could not synthesize audio with Google Cloud TTS, falling back to browser.", ttsError);
+            ttsErrorDetails = ttsError;
+            ttsSuccessful = false;
         }
 
         // --- 4. Send Response ---
         if (ttsSuccessful && audioStream) {
-             console.log("Streaming Google Cloud audio response to frontend.");
-             res.setHeader('Content-Type', 'audio/mpeg'); // Changed to audio/mpeg for MP3
-             res.setHeader('X-AI-Response-Text', encodeURIComponent(aiResponseText));
-             res.setHeader('X-User-Transcription', encodeURIComponent(userText));
-             audioStream.pipe(res);
-             audioStream.on('error', (streamError) => console.error("Google Cloud audio stream pipe error:", streamError));
-             audioStream.on('end', () => console.log('Google Cloud audio stream finished piping.'));
-             req.on('close', () => {
-                 console.log("Client closed connection during Google Cloud streaming.");
-                 if (audioStream.destroy) audioStream.destroy();
-                 else if (audioStream.unpipe) audioStream.unpipe(res);
-             });
+            console.log("Streaming Google Cloud audio response to frontend.");
+            res.setHeader('Content-Type', 'audio/mpeg'); // Changed to audio/mpeg for MP3
+            res.setHeader('X-AI-Response-Text', encodeURIComponent(aiResponseText));
+            res.setHeader('X-User-Transcription', encodeURIComponent(userText));
+            audioStream.pipe(res);
+            audioStream.on('error', (streamError) => console.error("Google Cloud audio stream pipe error:", streamError));
+            audioStream.on('end', () => console.log('Google Cloud audio stream finished piping.'));
+            req.on('close', () => {
+                console.log("Client closed connection during Google Cloud streaming.");
+                if (audioStream.destroy) audioStream.destroy();
+                else if (audioStream.unpipe) audioStream.unpipe(res);
+            });
         } else {
             // Fallback: Send JSON response with AI text for browser TTS
             console.log("TTS synthesis failed or disabled. Using fallback: Sending JSON response for browser TTS.");
