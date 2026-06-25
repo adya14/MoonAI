@@ -16,6 +16,9 @@
     "@fortawesome/free-solid-svg-icons": "^6.7.2",
     "@fortawesome/react-fontawesome": "^0.2.2",
     "@google-cloud/text-to-speech": "^6.1.0",
+    "@langchain/core": "^1.2.1",
+    "@langchain/langgraph": "^1.4.6",
+    "@langchain/openai": "^1.5.3",
     "@picovoice/web-voice-processor": "^4.0.9",
     "@ricky0123/vad-web": "^0.0.24",
     "@twilio/voice-sdk": "^2.12.4",
@@ -31,6 +34,7 @@
     "fs": "^0.0.1-security",
     "fs-extra": "^11.3.0",
     "jsonwebtoken": "^9.0.2",
+    "langsmith": "^0.7.11",
     "mic": "^2.1.2",
     "mongoose": "^8.12.1",
     "multer": "^1.4.5-lts.2",
@@ -57,6 +61,7 @@
     "voice-activity-detection": "^0.0.5",
     "wav": "^1.0.2",
     "wavefile": "^11.0.0",
-    "ws": "^8.18.1"
+    "ws": "^8.18.1",
+    "zod": "^3.25.76"
   }
 }

@@ -16,6 +16,7 @@ const ScheduledCall = require("./models/ScheduledCall");
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 const { getAiResponse, transcribeBuffer, generateFinalScore, getQnAResponse } = require('./interview'); // Updated import
+const { runInterviewTurn } = require('./interviewGraph'); // LangGraph-driven phase state machine
 const { convertAudio } = require('./audioProcessor'); // Import conversion function
 const path = require('path');
 const app = express();
@@ -476,71 +477,20 @@ app.post('/continue-interview/:callSid', async (req, res) => {
     console.log(`[${callSid}] Continuing interview, current phase: ${state.phase}`);
 
     try {
-        let aiResponse = "";
-        let nextPhase = state.phase; // Start with current phase
         let pauseDuration = 60; // Default pause length while waiting for user response
 
-        switch (state.phase) {
-            case 'introduction': // After user intro -> Ask Q1
-                aiResponse = await getAiResponse("Ask the first technical question, considering the user's introduction if relevant.", state.jobRole, state.jobDescription, false, state.history);
-                nextPhase = 'question1';
-                break;
-            case 'question1': // After user answer 1 -> Ask Q2
-                aiResponse = await getAiResponse("Ask the second technical question, considering the previous question and answer.", state.jobRole, state.jobDescription, false, state.history);
-                nextPhase = 'question2';
-                break;
-            case 'question2': // After user answer 2 -> Ask if user has questions
-                aiResponse = "Thank you for answering my questions. Now, do you have any questions for me about the role or the company? Feel free to ask, or you can say 'no questions'.";
-                nextPhase = 'qna_listen'; // Listen for user's question or lack thereof
-                break;
-            case 'qna_listen': // After potentially hearing user question -> Respond or end
-                 const lastUserMessage = state.history[state.history.length - 1];
-                 const hasQuestion = lastUserMessage &&
-                                    lastUserMessage.role === 'user' &&
-                                    lastUserMessage.content.trim() !== "" &&
-                                    !/^(no|nope|no questions?|nothing|i'm good|i am good)$/i.test(lastUserMessage.content.trim());
-
-                 if (hasQuestion) {
-                     console.log(`[${callSid}] Generating QnA response for: "${lastUserMessage.content}"`);
-                     const qnaAnswer = await Promise.race([
-                         getQnAResponse(lastUserMessage.content, state.history.slice(0, -1)),
-                         new Promise((resolve) => setTimeout(() => resolve("That's a good question. While I don't have the specific details right now, I'll make sure to pass it along to the team."), 8000)) // 8s timeout
-                     ]);
-                     aiResponse = `${qnaAnswer} Was there anything else you wanted to ask?`;
-                     nextPhase = 'qna_followup'; // Allow for another question or end
-                 } else {
-                     console.log(`[${callSid}] No user question detected or user indicated no questions. Ending interview.`);
-                     aiResponse = "Okay, thank you for confirming. This concludes our initial interview. We appreciate your time today and will be in touch regarding the next steps. Goodbye!";
-                     nextPhase = 'ending'; // Trigger hangup
-                 }
-                 break;
-             case 'qna_followup': // After answering a user question -> Check for more questions or end
-                 const lastFollowupMessage = state.history[state.history.length - 1];
-                 const hasFollowupQuestion = lastFollowupMessage &&
-                                           lastFollowupMessage.role === 'user' &&
-                                           lastFollowupMessage.content.trim() !== "" &&
-                                           !/^(no|nope|no more|that's all|i'm good|i am good|that helps|thank you)$/i.test(lastFollowupMessage.content.trim()); // Added "thank you"
-
-                 if (hasFollowupQuestion) {
-                      console.log(`[${callSid}] Generating response for followup question: "${lastFollowupMessage.content}"`);
-                      const followupAnswer = await Promise.race([
-                          getQnAResponse(lastFollowupMessage.content, state.history.slice(0, -1)),
-                          new Promise((resolve) => setTimeout(() => resolve("Thanks for the additional question. I've noted that one down as well."), 8000))
-                      ]);
-                      aiResponse = `${followupAnswer} Anything else?`;
-                      nextPhase = 'qna_followup'; // Loop back to allow more questions
-                 } else {
-                      console.log(`[${callSid}] No further questions detected or user finished. Ending interview.`);
-                      aiResponse = "Great. Thank you again for your time and interest! We'll be in touch soon. Have a great day. Goodbye!";
-                      nextPhase = 'ending';
-                 }
-                 break;
-
-            default:
-                console.warn(`[${callSid}] Reached /continue-interview with unexpected phase: ${state.phase}. Ending call.`);
-                aiResponse = "It seems we've reached the end or encountered an issue. Thank you for your time. Goodbye.";
-                nextPhase = 'ending';
-        }
+        // Advance the interview by exactly one turn through the LangGraph state machine.
+        // The graph (interviewGraph.js) owns all phase transitions and AI-response logic;
+        // it is checkpointed per callSid (thread_id) and traced to LangSmith.
+        const turn = await runInterviewTurn(callSid, {
+            history: state.history,
+            phase: state.phase,
+            jobRole: state.jobRole,
+            jobDescription: state.jobDescription,
+        });
+        let aiResponse = turn.aiResponse;
+        let nextPhase = turn.nextPhase;
+        console.log(`[${callSid}] Graph turn: phase ${state.phase} -> ${nextPhase} (hangup: ${turn.shouldHangup})`);
 
         // Log AI response only if it's not empty
         if (aiResponse) {

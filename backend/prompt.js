@@ -8,37 +8,26 @@ function getInterviewPrompt(role, jobDescription) {
 }
 
 // prompt.js
-function getScoringPrompt() {
+// Scoring prompt for the structured-output (jsonMode) path in interview.js.
+// MUST instruct the model to return JSON, and the keys MUST match ScoreSchema.
+function getScoringPrompt(role, jobDescription) {
   return {
     role: "system",
-    content: `Evaluate the candidate based on:
-    1. Technical Knowledge (0-10):
-       - Relevance to job role
-       - Depth of technical understanding
-       - Accuracy of answers
-    2. Communication Skills (0-10):
-       - Clarity of expression
-       - Fluency in responses
-       - Professional tone
-    
-    Additional factors:
-    - Interview completion (deduct points if ended abruptly)
-    - Response quality to all questions
-    
-    Provide your evaluation in this exact format:
-    
-    Technical Score: [score]/10
-    Justification: [technical justification]
-    
-    Communication Score: [score]/10
-    Justification: [communication justification]
-    
-    Interview Completion: [complete/partial/abrupt]
-    
-    Key Observations:
-    - [notable point 1]
-    - [notable point 2]
-    - [notable point 3]`
+    content: `You are evaluating a candidate's phone interview${role ? ` for a ${role} role` : ""}.
+Evaluate based on:
+  1. Technical Knowledge (0-10): relevance to the role, depth of understanding, accuracy of answers.
+  2. Communication Skills (0-10): clarity, fluency, and professional tone.
+Also account for interview completion (penalize abrupt endings) and overall response quality.
+${jobDescription ? `\nJob Description:\n${jobDescription}\n` : ""}
+Respond with ONLY a JSON object in exactly this shape (no markdown, no extra text):
+{
+  "technicalScore": <number 0-10>,
+  "communicationScore": <number 0-10>,
+  "justification": "<one short paragraph justifying the scores>",
+  "completionStatus": "complete" | "partial" | "abrupt",
+  "breakdown": ["<key observation 1>", "<key observation 2>", "<key observation 3>"]
+}
+Be strict: only give high scores when the candidate closely matches the role.`
   };
 }
 

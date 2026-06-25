@@ -1,0 +1,16 @@
+node_modules/
+.env
+.env.local
+.env.*.local
+
+# Service-account / credentials
+*-*.json
+!package.json
+!package-lock.json
+
+# Runtime artifacts
+temp_transcribe/
+call_recordings_legacy/
+*.wav
+*.log
+.DS_Store
