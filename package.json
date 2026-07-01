@@ -1,14 +1,15 @@
 {
   "scripts": {
-  "start": "node server.js",
-  "dev": "nodemon server.js"
-},
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
     "@fortawesome/fontawesome-free": "^6.7.2",
     "@fortawesome/free-regular-svg-icons": "^6.7.2",
     "@fortawesome/free-solid-svg-icons": "^6.7.2",
     "@fortawesome/react-fontawesome": "^0.2.2",
+    "@langchain/aws": "^1.4.2",
     "bcrypt": "^5.1.1",
     "body-parser": "^1.20.3",
     "cors": "^2.8.5",
@@ -25,5 +26,3 @@
     "react-intersection-observer": "^9.16.0"
   }
 }
-
-

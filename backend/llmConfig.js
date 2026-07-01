@@ -1,76 +1,39 @@
-// llmConfig.js
-// Central LangChain model setup for MoonAI.
-// All LLM reasoning goes through DeepSeek via OpenRouter (OpenAI-compatible API),
-// wrapped in LangChain's ChatOpenAI. When LANGSMITH_TRACING=true, every .invoke()
-// here is automatically traced to LangSmith — no extra code needed at call sites.
+// llmConfig.js — Central LangChain model setup for MoonAI (AWS Bedrock).
 require('dotenv').config();
 
-const { ChatOpenAI } = require('@langchain/openai');
+const { ChatBedrockConverse } = require('@langchain/aws');
 const {
-  SystemMessage,
-  HumanMessage,
-  AIMessage,
+  SystemMessage, HumanMessage, AIMessage,
 } = require('@langchain/core/messages');
 
-const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
-const DEEPSEEK_MODEL = 'deepseek/deepseek-chat';
+// Cheapest option: Amazon Nova Micro. For better reasoning, swap to Claude Haiku:
+//   'us.anthropic.claude-3-5-haiku-20241022-v1:0'   (needs cross-region inference profile enabled)
+const BEDROCK_MODEL = process.env.BEDROCK_MODEL || 'amazon.nova-micro-v1:0';
+const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 
-/**
- * Build a LangChain ChatOpenAI instance pointed at OpenRouter/DeepSeek.
- * @param {object} [opts]
- * @param {number} [opts.temperature=0.7]
- * @param {number} [opts.timeout=15000]
- * @returns {ChatOpenAI}
- */
 function createChatModel({ temperature = 0.7, timeout = 15000 } = {}) {
-  if (!process.env.DEEPSEEK_API) {
-    // Surface the same warning the old code did, but defer hard-failure to call time.
-    console.warn('Warning: DEEPSEEK_API key not found. LLM calls will fail.');
-  }
-  return new ChatOpenAI({
-    model: DEEPSEEK_MODEL,
+  return new ChatBedrockConverse({
+    model: BEDROCK_MODEL,
+    region: AWS_REGION,
     temperature,
-    apiKey: process.env.DEEPSEEK_API,
-    timeout,
     maxRetries: 2,
-    configuration: {
-      baseURL: OPENROUTER_BASE_URL,
-      defaultHeaders: {
-        'HTTP-Referer': process.env.OPENROUTER_REFERER || 'https://moonai.app',
-        'X-Title': 'AI Interview Bot',
-      },
-    },
+    // On EC2: do NOT set keys here. The instance's IAM role supplies credentials automatically.
+    // Locally: it reads AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY from your env.
   });
 }
 
-/**
- * Convert the app's `{ role, content }` history (OpenAI-style) into LangChain
- * message objects. Roles: system | user/human | assistant/ai.
- * @param {Array<{role: string, content: string}>} history
- * @returns {Array}
- */
 function toLangChainMessages(history = []) {
   if (!Array.isArray(history)) return [];
   return history
     .filter((m) => m && typeof m.content === 'string')
     .map((m) => {
       switch (m.role) {
-        case 'system':
-          return new SystemMessage(m.content);
+        case 'system': return new SystemMessage(m.content);
         case 'assistant':
-        case 'ai':
-          return new AIMessage(m.content);
-        case 'user':
-        case 'human':
-        default:
-          return new HumanMessage(m.content);
+        case 'ai': return new AIMessage(m.content);
+        default: return new HumanMessage(m.content);
       }
     });
 }
 
-module.exports = {
-  createChatModel,
-  toLangChainMessages,
-  DEEPSEEK_MODEL,
-  OPENROUTER_BASE_URL,
-};
+module.exports = { createChatModel, toLangChainMessages, BEDROCK_MODEL, AWS_REGION };
